@@ -26,6 +26,7 @@ except ImportError:  # Direct execution: python tools/benchmark_gold_groups.py
 def load_documents(path: Path) -> list[dict[str, Any]]:
     documents = []
     seen_ids = set()
+    movie_splits: dict[str, str] = {}
     for line_no, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
         if not line.strip():
             continue
@@ -48,6 +49,11 @@ def load_documents(path: Path) -> list[dict[str, Any]]:
             raise ValueError(f"JSONL line {line_no}: split must be calibration or test")
         if item.get("annotation_status") != "human_verified":
             raise ValueError(f"JSONL line {line_no}: only human_verified gold records can be benchmarked")
+        movie_id = str(item.get("movie_id", "")).strip()
+        if movie_id:
+            previous_split = movie_splits.setdefault(movie_id, split)
+            if previous_split != split:
+                raise ValueError(f"JSONL line {line_no}: movie {movie_id} leaks across calibration and test")
         if not str(item.get("annotator", "")).strip() or not str(item.get("reviewed_at", "")).strip():
             raise ValueError(f"JSONL line {line_no}: annotator and reviewed_at are required for human gold")
         groups = []
