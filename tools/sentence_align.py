@@ -8,24 +8,40 @@ from __future__ import annotations
 import re
 from typing import Any, Sequence
 
-SENTENCE_END = re.compile(r"(?<=[!?。！？])\s*|(?<=\.)\s+")
 ABBREVIATIONS = re.compile(
     r"\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|U\.S|U\.K)\.",
     re.IGNORECASE,
 )
+SENTENCE_BOUNDARY = re.compile(
+    r"""[!?。！？]+["'”’」』】）)\]]*|(?<!\d)\.["'”’」』】）)\]]*"""
+)
 
 
 def split_sentences(text: str) -> list[str]:
-    """Split English/Chinese text while preserving terminal punctuation."""
+    """Split sentences without detaching terminal closing quotation marks."""
     protected = ABBREVIATIONS.sub(
         lambda match: match.group().replace(".", "\uE000"), text.strip()
     )
     protected = re.sub(r"(?<=\d)\.(?=\d)", "\uE000", protected)
-    return [
-        part.replace("\uE000", ".").strip()
-        for part in SENTENCE_END.split(protected)
-        if part.strip()
-    ]
+    parts = []
+    start = 0
+    for match in SENTENCE_BOUNDARY.finditer(protected):
+        end = match.end()
+        mark = match.group()
+        # A period only ends a sentence before whitespace or end-of-input.
+        if "." in mark and end < len(protected) and not protected[end].isspace():
+            continue
+        piece = protected[start:end].strip()
+        if piece:
+            parts.append(piece.replace("\uE000", "."))
+        start = end
+        while start < len(protected) and protected[start].isspace():
+            start += 1
+    tail = protected[start:].strip()
+    if tail:
+        parts.append(tail.replace("\uE000", "."))
+    return parts
+
 
 def build_similarity_tables(source_vectors, target_vectors):
     """Vectorize all 1:1, 1:2, 2:1 and 2:2 cosine scores once per document."""
@@ -63,8 +79,9 @@ def align_sentence_embeddings(
 ) -> dict:
     """Globally align sentence vectors with monotonic 1:1, 1:2, 2:1 and 2:2 transitions.
 
-    Merge transitions compare mean pooled adjacent sentence vectors. The
-    function is model-agnostic, which makes the DP independently testable.
+    Merge transitions compare mean pooled adjacent sentence vectors. Rewards
+    are scaled by the mean number of consumed sentences so a 2:2 transition
+    is not automatically disadvantaged against two separate 1:1 transitions.
     """
     import math
 
@@ -160,7 +177,8 @@ def align_sentence_embeddings(
             for take_source, take_target, similarity, penalty in transitions:
                 if similarity < threshold:
                     continue
-                reward = similarity - threshold - penalty
+                coverage_scale = (take_source + take_target) / 2.0
+                reward = (similarity - threshold) * coverage_scale - penalty
                 update(
                     i + take_source, j + take_target, current + reward,
                     (i, j), ("match", take_source, take_target, similarity),
