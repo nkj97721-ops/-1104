@@ -67,8 +67,9 @@ def align_sentence_embeddings(
     dimensions = {len(vector) for vector in vectors}
     if len(dimensions) > 1 or (dimensions and 0 in dimensions):
         raise ValueError("All sentence vectors must have the same non-zero dimension")
-    if any(not math.isfinite(float(value)) for vector in vectors for value in vector):
-        raise ValueError("Sentence vectors must contain only finite values")
+    if similarity_tables is None:
+        if any(not math.isfinite(float(value)) for vector in vectors for value in vector):
+            raise ValueError("Sentence vectors must contain only finite values")
 
     if similarity_tables is not None:
         if len(similarity_tables) != 3:
