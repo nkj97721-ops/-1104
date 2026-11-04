@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.benchmark_gold_groups import load_documents, prf
+from tools.benchmark_gold_groups import aggregate, load_documents, prf
 
 
 class GoldGroupFormatTests(unittest.TestCase):
@@ -83,6 +83,22 @@ class GoldGroupFormatTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "leaks across"):
                 load_documents(path)
+
+    def test_aggregate_reports_per_group_type_and_marks_unmatched_not_estimable(self):
+        row = {
+            "exact_groups": 2, "predicted_groups": 3, "gold_groups": 2,
+            "correct_links": 3, "predicted_links": 4, "gold_links": 3,
+            "correct_unmatched": 0, "predicted_unmatched": 1, "gold_unmatched": 0,
+            "group_type_counts": {
+                "1:1": {"correct": 1, "predicted": 2, "reference": 1},
+                "2:1": {"correct": 1, "predicted": 1, "reference": 1},
+            },
+        }
+        result = aggregate([row])
+        self.assertAlmostEqual(result["group_type"]["1:1"]["precision"], 0.5)
+        self.assertAlmostEqual(result["group_type"]["1:1"]["recall"], 1.0)
+        self.assertEqual(result["unmatched"]["status"], "NOT_ESTIMABLE_NO_REFERENCE_UNMATCHED")
+        self.assertIsNone(result["unmatched"]["f1"])
 
     def test_prf_zero_denominators_are_safe(self):
         self.assertEqual(prf(0, 0, 0), {"precision": 0.0, "recall": 0.0, "f1": 0.0})
