@@ -20,6 +20,18 @@ const { chromium } = require("playwright");
   assert.deepEqual(phraseData,[
    {en:"take",zh:"仔细"},{en:"acloserlook",zh:"看一看"},{en:"attheissue",zh:"这个问题"}
   ]);
+  await page.locator("#english").fill("one | two\nthree | four");
+  await page.locator("#chinese").fill("一 | 二\n三 | 四");
+  await page.waitForFunction(()=>document.querySelectorAll("#preview .pair").length===4);
+  const multilinePairs=await page.evaluate(()=>Array.from(document.querySelectorAll("#preview .pair")).map(p=>[
+   p.querySelector(".en").textContent,p.querySelector(".zh").textContent
+  ]));
+  assert.deepEqual(multilinePairs,[["one","一"],["two","二"],["three","三"],["four","四"]]);
+  await page.locator("#english").fill("one | two\n\nthree | four");
+  await page.locator("#chinese").fill("一 | 二\n\n三 | 四");
+  await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("短语为空"));
+  assert.equal(await page.locator("#preview .pair").count(),0);
+  await page.locator("#english").fill("take | a closer look | at the issue");
   await page.locator("#chinese").fill("仔细 | 看一看");
   await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("句子行数相同"));
   assert.equal(await page.locator("#preview .pair").count(),0);
