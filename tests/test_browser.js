@@ -9,6 +9,21 @@ const { chromium } = require("playwright");
   const errors=[]; page.on("pageerror",e=>errors.push(e.message));
   await page.goto(pathToFileURL(path.resolve(__dirname,"../specimen/index.html")).href);
   await page.evaluate(()=>document.fonts.ready);
+  await page.locator("#english").fill("take | a closer look | at the issue");
+  await page.locator("#chinese").fill("仔细 | 看一看 | 这个问题");
+  await page.locator("#mode").selectOption("phrases");
+  await page.waitForFunction(()=>document.querySelectorAll("#preview .pair").length===3);
+  let phraseData=await page.evaluate(()=>Array.from(document.querySelectorAll("#preview .pair")).map(p=>({
+   en:Array.from(p.querySelectorAll(".en")).map(x=>x.textContent).join("").replace(/\\s/g,""),
+   zh:Array.from(p.querySelectorAll(".zh")).map(x=>x.textContent).join("")
+  })));
+  assert.deepEqual(phraseData,[
+   {en:"take",zh:"仔细"},{en:"acloserlook",zh:"看一看"},{en:"attheissue",zh:"这个问题"}
+  ]);
+  await page.locator("#chinese").fill("仔细 | 看一看");
+  await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("句子行数相同"));
+  assert.equal(await page.locator("#preview .pair").count(),0);
+  await page.locator("#chinese").fill("仔细 | 看一看 | 这个问题");
   await page.locator("#english").fill("The first sentence is here. The second sentence follows!");
   await page.locator("#chinese").fill("第一句话在这里。第二句话紧随其后！");
   await page.locator("#mode").selectOption("sentences");
