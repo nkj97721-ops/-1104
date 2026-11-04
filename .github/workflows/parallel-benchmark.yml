@@ -52,7 +52,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_sentence*.py' -v
           python -m unittest discover -s tests -p 'test_download_parallel_corpus.py' -v
 
-      - name: Download OPUS OpenSubtitles English–Simplified-Chinese corpus
+      - name: Stream OPUS OpenSubtitles English–Simplified-Chinese paired records
         run: |
           python tools/download_parallel_corpus.py \
             --output data/opensubtitles-en-zh-cn.tsv \
