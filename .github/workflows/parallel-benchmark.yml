@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: parallel-benchmark-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   benchmark:
