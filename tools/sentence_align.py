@@ -35,11 +35,10 @@ def align_sentence_embeddings(
     merge_penalty: float = 0.06,
     similarity_tables=None,
 ) -> dict:
-    """Globally align sentence vectors with a monotonic dynamic program.
+    """Globally align sentence vectors with monotonic 1:1, 1:2, 2:1 and 2:2 transitions.
 
-    Similarity is cosine similarity. A merge transition compares the mean
-    vector of two adjacent sentences with one sentence on the opposite side.
-    The function is model-agnostic, which makes the DP independently testable.
+    Merge transitions compare mean pooled adjacent sentence vectors. The
+    function is model-agnostic, which makes the DP independently testable.
     """
     import math
 
@@ -120,6 +119,9 @@ def align_sentence_embeddings(
                 score = (float(similarity_tables[2][i][j]) if similarity_tables is not None
                          else cosine(mean(source_vectors[i:i + 2]), target_vectors[j]))
                 transitions.append((2, 1, score, merge_penalty))
+            if i + 1 < n and j + 1 < m:
+                score = cosine(mean(source_vectors[i:i + 2]), mean(target_vectors[j:j + 2]))
+                transitions.append((2, 2, score, 2.0 * merge_penalty))
 
             for take_source, take_target, similarity, penalty in transitions:
                 if similarity < threshold:
@@ -162,18 +164,25 @@ def align_sentence_embeddings(
     }
 
 
+_MODEL_CACHE: dict[tuple[str, str], Any] = {}
+
+
 def encode_sentences(
     sentences: Sequence[str],
     model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     no_cuda: bool = False,
-    batch_size: int = 16,
+    batch_size: int = 32,
 ) -> Any:
-    """Create local multilingual sentence embeddings trained for semantic similarity."""
+    """Create embeddings, reusing one loaded model per model/device pair."""
     import torch
     from sentence_transformers import SentenceTransformer
 
     device = "cpu" if no_cuda or not torch.cuda.is_available() else "cuda"
-    model = SentenceTransformer(model_name, device=device)
+    cache_key = (model_name, device)
+    model = _MODEL_CACHE.get(cache_key)
+    if model is None:
+        model = SentenceTransformer(model_name, device=device)
+        _MODEL_CACHE[cache_key] = model
     vectors = model.encode(
         list(sentences),
         batch_size=batch_size,
