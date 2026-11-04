@@ -90,11 +90,9 @@ def prf(correct: int, predicted: int, gold: int) -> dict[str, float]:
     return {"precision": p, "recall": r, "f1": f1(p, r)}
 
 
-def evaluate_document(doc: dict[str, Any], model: str, threshold: float,
-                      gap_penalty: float, merge_penalty: float,
-                      no_cuda: bool) -> dict[str, Any]:
+def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
+                      gap_penalty: float, merge_penalty: float) -> dict[str, Any]:
     source, target = doc["source"], doc["target"]
-    vectors = encode_sentences(source + target, model, no_cuda)
     result = align_sentence_embeddings(
         vectors[:len(source)], vectors[len(source):],
         threshold=threshold, gap_penalty=gap_penalty,
@@ -184,9 +182,14 @@ def main() -> None:
             or any(not math.isfinite(x) or x < 0 for x in gaps + merges)):
         raise ValueError("Invalid threshold or penalty grid")
 
+    # Load each document embedding exactly once; parameter search reuses vectors.
+    vectors_by_id = {
+        x["id"]: encode_sentences(x["source"] + x["target"], args.model, args.no_cuda)
+        for x in docs
+    }
     candidates = []
     for threshold, gap, merge in itertools.product(thresholds, gaps, merges):
-        rows = [evaluate_document(x, args.model, threshold, gap, merge, args.no_cuda) for x in dev]
+        rows = [evaluate_document(x, vectors_by_id[x["id"]], threshold, gap, merge) for x in dev]
         summary = aggregate(rows)
         candidates.append({
             "threshold": threshold, "gap_penalty": gap, "merge_penalty": merge,
@@ -199,8 +202,8 @@ def main() -> None:
     ))
     # Test documents are evaluated once, after all parameters are frozen.
     heldout_rows = [
-        evaluate_document(x, args.model, best["threshold"], best["gap_penalty"],
-                          best["merge_penalty"], args.no_cuda)
+        evaluate_document(x, vectors_by_id[x["id"]], best["threshold"],
+                          best["gap_penalty"], best["merge_penalty"])
         for x in test
     ]
     report = {
