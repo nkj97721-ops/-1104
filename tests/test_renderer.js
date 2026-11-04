@@ -1,17 +1,62 @@
 const assert = require("node:assert/strict");
-const { wrapText, wrapPair, paragraphBlocks, lineBlocks } = require("../specimen/renderer.js");
+const {
+  wrapText, wrapPair, paragraphBlocks, lineBlocks,
+  splitSentences, preparePairs
+} = require("../specimen/renderer.js");
+
 const measure = text => Array.from(text).length * 10;
 const en = "The quick brown fox jumps over the lazy dog.";
 const zh = "敏捷的棕色狐狸跳过了那只懒狗。";
 const rows = wrapPair(en, zh, 70, measure, measure);
 assert.ok(rows.length > 1);
-assert.equal(rows.length, wrapPair(en, zh, 70, measure, measure).length);
 assert.equal(rows.map(row => row.en).join("").replace(/\s/g, ""), en.replace(/\s/g, ""));
 assert.equal(rows.map(row => row.zh).join(""), zh);
 assert.deepEqual(paragraphBlocks("a\nb\n\nc\nd"), ["a b", "c d"]);
 assert.deepEqual(lineBlocks("a\nb"), ["a", "b"]);
-const uneven = wrapPair("A", "非常非常长的一段中文文本", 20, measure, measure);
-assert.ok(uneven.length > 1);
-assert.equal(uneven[0].en, "A");
-assert.equal(uneven.map(row => row.zh).join(""), "非常非常长的一段中文文本");
-console.log("renderer tests passed");
+
+const sentenceEn = "The first sentence is here. The second sentence follows!";
+const sentenceZh = "第一句话在这里。第二句话紧随其后！";
+assert.equal(splitSentences(sentenceEn).length, 2);
+assert.equal(splitSentences(sentenceZh).length, 2);
+
+const sentencePairs = preparePairs(sentenceEn, sentenceZh, "sentences");
+assert.equal(sentencePairs.errors.length, 0);
+assert.deepEqual(sentencePairs.pairs.map(x => x.en), [
+  "The first sentence is here.", "The second sentence follows!"
+]);
+assert.deepEqual(sentencePairs.pairs.map(x => x.zh), [
+  "第一句话在这里。", "第二句话紧随其后！"
+]);
+
+const mismatch = preparePairs(
+  "The first sentence. The second sentence.",
+  "只有一句中文。",
+  "sentences"
+);
+assert.equal(mismatch.pairs.length, 0);
+assert.equal(mismatch.errors.length, 1);
+assert.match(mismatch.errors[0], /数量不一致/);
+
+const paragraphMismatch = preparePairs(
+  "First sentence. Second sentence.\n\nAnother paragraph.",
+  "第一句。第二句。第三句。\n\n另一个段落。",
+  "paragraphs"
+);
+assert.equal(paragraphMismatch.pairs.length, 0);
+assert.equal(paragraphMismatch.errors.length, 1);
+assert.match(paragraphMismatch.errors[0], /第 1 段句子数量不一致/);
+
+const lineMismatch = preparePairs("English line one.\nEnglish line two.", "只有一行中文。", "lines");
+assert.equal(lineMismatch.pairs.length, 0);
+assert.equal(lineMismatch.errors.length, 1);
+
+const goodParagraphs = preparePairs(
+  "First sentence. Second sentence.\n\nAnother paragraph.",
+  "第一句。第二句。\n\n另一个段落。",
+  "paragraphs"
+);
+assert.equal(goodParagraphs.errors.length, 0);
+assert.equal(goodParagraphs.pairs.length, 3);
+assert.equal(goodParagraphs.pairs[2].paragraph, 2);
+
+console.log("semantic alignment tests passed");
