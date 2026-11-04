@@ -92,5 +92,5 @@ jobs:
             data/wmt-human-review/annotation_queue.jsonl
             reports/opensubtitles2024-silver-comparison.json
             reports/wmt17-silver-comparison.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
