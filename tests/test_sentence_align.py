@@ -36,6 +36,15 @@ class SentenceAlignmentTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["source_indices"], [0])
         self.assertEqual(result["matches"][0]["target_indices"], [0, 1])
 
+    def test_supports_two_to_two_sentence_group(self):
+        result = ALIGN.align_sentence_embeddings(
+            [[1, 0], [0, 1]], [[1, 1], [1, 1]],
+            threshold=0.9, merge_penalty=0.0, gap_penalty=0.2,
+        )
+        self.assertEqual(len(result["matches"]), 1)
+        self.assertEqual(result["matches"][0]["source_indices"], [0, 1])
+        self.assertEqual(result["matches"][0]["target_indices"], [0, 1])
+
     def test_marks_unrelated_sentences_unmatched(self):
         result = ALIGN.align_sentence_embeddings([[1, 0]], [[-1, 0]], threshold=0.4, gap_penalty=0.1)
         self.assertEqual(result["matches"], [])
