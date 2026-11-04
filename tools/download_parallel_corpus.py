@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
-"""Stream a verified English–Simplified-Chinese OpenSubtitles corpus.
+"""Download paired EN–Simplified-Chinese rows from the OPUS OpenSubtitles mirror.
 
-The Hugging Face mirror is derived from OPUS OpenSubtitles v2024 and exposes
-explicit source/target columns. Streaming avoids loading a multi-gigabyte
-archive into RAM and keeps each translation pair in one dataset row.
+Uses the Hugging Face Dataset Viewer JSON API instead of the datasets/pyarrow
+runtime. Pages are fetched concurrently but yielded in source order, and each
+row carries its own source/target pair.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Iterable, Iterator
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 DATASET_ID = "FradSer/OpenSubtitles-en-zh-cn-20m"
-
-# These are strong written-Cantonese markers, not a general dialect detector.
-# A single marker is enough to exclude a likely Cantonese target from this
-# Mandarin-oriented benchmark; the count is recorded in the manifest.
+DATASET_VIEWER = "https://datasets-server.huggingface.co"
+PAGE_SIZE = 100
+PREFETCH_PAGES = 8
 CANTONESE_MARKERS = re.compile(r"[嘅咗喺冇唔咩噉嗰喎啱嚟乜係佢]")
 CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 LATIN = re.compile(r"[A-Za-z]")
@@ -33,37 +37,88 @@ def normalize_pair(row: dict[str, Any], traditional_to_simplified) -> tuple[str,
         return "", "", "not_english"
     if not CJK.search(zh):
         return "", "", "not_chinese"
-    simplified = traditional_to_simplified.convert(zh)
-    if simplified != zh:
+    if traditional_to_simplified.convert(zh) != zh:
         return "", "", "traditional"
     if CANTONESE_MARKERS.search(zh):
         return "", "", "likely_cantonese"
-    # One TSV row is one dataset record: no independent line-wise pairing.
     en = re.sub(r"\s+", " ", en).replace("\t", " ")
     zh = re.sub(r"\s+", " ", zh).replace("\t", " ")
     return en, zh, None
 
 
+def request_json(endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
+    url = DATASET_VIEWER + endpoint + "?" + urlencode(params)
+    request = Request(url, headers={"User-Agent": "TwinLine-Corpus-Benchmark/1.0"})
+    last_error = None
+    for attempt in range(4):
+        try:
+            with urlopen(request, timeout=60) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if "error" in payload:
+                raise RuntimeError(f"Hugging Face dataset viewer error: {payload['error']}")
+            return payload
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+            last_error = exc
+            if attempt == 3:
+                break
+            time.sleep(1.5 * (attempt + 1))
+    raise RuntimeError(f"Dataset Viewer request failed: {url}: {last_error}")
+
+
 def iter_dataset_rows() -> Iterator[dict[str, Any]]:
-    """Yield paired records from the streaming dataset."""
-    try:
-        from datasets import load_dataset
-    except ImportError as exc:
-        raise SystemExit("缺少 datasets 依赖：请执行 pip install 'datasets>=3,<5'") from exc
+    """Fetch 100-row API pages concurrently while preserving source order."""
+    split_info = request_json("/splits", {"dataset": DATASET_ID})
+    train_splits = [item for item in split_info.get("splits", []) if item.get("split") == "train"]
+    if len(train_splits) != 1:
+        raise RuntimeError(f"Expected one train split, found {len(train_splits)}: {train_splits}")
+    config = train_splits[0]["config"]
 
-    dataset = load_dataset(DATASET_ID, split="train", streaming=True)
-    columns = set(getattr(dataset, "column_names", []) or [])
-    if columns and not {"source", "target"}.issubset(columns):
-        raise RuntimeError(
-            f"语料字段不符合预期：需要 source/target，实际字段为 {sorted(columns)}"
-        )
-    yield from dataset
+    first = request_json("/rows", {
+        "dataset": DATASET_ID, "config": config, "split": "train",
+        "offset": 0, "length": PAGE_SIZE,
+    })
+    total_rows = int(first.get("num_rows_total", 0))
+    if total_rows <= 0 or first.get("partial"):
+        raise RuntimeError("Dataset Viewer did not return a complete, non-empty train split.")
+
+    for item in first.get("rows", []):
+        yield item["row"]
+
+    offsets = range(PAGE_SIZE, total_rows, PAGE_SIZE)
+    with ThreadPoolExecutor(max_workers=PREFETCH_PAGES) as executor:
+        pending_offsets: list[int] = []
+        for offset in offsets:
+            pending_offsets.append(offset)
+            if len(pending_offsets) == PREFETCH_PAGES:
+                yield from _fetch_pages_in_order(executor, pending_offsets, config)
+                pending_offsets.clear()
+        if pending_offsets:
+            yield from _fetch_pages_in_order(executor, pending_offsets, config)
 
 
-def download_pairs(output: Path, limit: int = 0, rows: Iterable[dict[str, Any]] | None = None) -> dict[str, Any]:
+def _fetch_pages_in_order(executor, offsets: list[int], config: str):
+    futures = [
+        executor.submit(request_json, "/rows", {
+            "dataset": DATASET_ID, "config": config, "split": "train",
+            "offset": offset, "length": PAGE_SIZE,
+        })
+        for offset in offsets
+    ]
+    for future in futures:
+        payload = future.result()
+        if payload.get("partial"):
+            raise RuntimeError("Dataset Viewer returned a partial page; refusing incomplete corpus.")
+        for item in payload.get("rows", []):
+            yield item["row"]
+
+
+def download_pairs(
+    output: Path,
+    limit: int = 0,
+    rows: Iterable[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     if limit < 0:
         raise ValueError("--limit 不能为负数。")
-
     try:
         from opencc import OpenCC
     except ImportError as exc:
@@ -92,11 +147,9 @@ def download_pairs(output: Path, limit: int = 0, rows: Iterable[dict[str, Any]] 
                 counters["written"] += 1
                 if limit and counters["written"] >= limit:
                     break
-
         if counters["written"] < 100:
             raise RuntimeError(
-                f"有效英中简体句对只有 {counters['written']} 条；"
-                "拒绝生成不足以评测的语料。"
+                f"有效英中简体句对只有 {counters['written']} 条；拒绝生成不足以评测的语料。"
             )
         temporary.replace(output)
     except Exception:
@@ -105,7 +158,7 @@ def download_pairs(output: Path, limit: int = 0, rows: Iterable[dict[str, Any]] 
 
     manifest = {
         "dataset": DATASET_ID,
-        "source": "OPUS OpenSubtitles v2024 via Hugging Face dataset mirror",
+        "source": "OPUS OpenSubtitles v2024 via Hugging Face Dataset Viewer rows API",
         "language_pair": "en-zh-CN",
         "script_policy": "Simplified Chinese only; rows changed by OpenCC t2s are rejected",
         "dialect_policy": "heuristic written-Cantonese marker filter; not a complete dialect classifier",
