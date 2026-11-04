@@ -1,0 +1,7 @@
+# Downloaded corpora, manual annotations, and generated evaluation reports
+/data/
+/reports/
+/.hf-cache/
+__pycache__/
+*.py[cod]
+*.partial
