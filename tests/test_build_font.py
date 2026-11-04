@@ -1,6 +1,7 @@
 import unittest
 
-from build_font import (MAX_GLYPH_ADVANCE, MAX_PAIRS, PUA_START, composite_advance_width,\n                        expand_pairs, split_text_to_width, validate_pairs)
+from build_font import (MAX_GLYPH_ADVANCE, MAX_PAIRS, PUA_START, composite_advance_width,
+                        expand_pairs, split_text_to_width, validate_pairs)
 
 
 class ValidatePairsTests(unittest.TestCase):
