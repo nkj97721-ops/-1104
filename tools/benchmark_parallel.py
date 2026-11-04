@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import random
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -161,7 +160,6 @@ def main() -> None:
     ap.add_argument("--thresholds", default="0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60")
     ap.add_argument("--gap-penalties", default="0.06,0.12,0.18,0.24")
     ap.add_argument("--merge-penalties", default="0.02,0.06,0.10,0.14")
-    ap.add_argument("--seed", type=int, default=1104)
     ap.add_argument("--no-cuda", action="store_true")
     args = ap.parse_args()
 
@@ -304,7 +302,6 @@ def main() -> None:
         "candidate_models": model_names,
         "split": {
             "strategy": "contiguous_prefix_calibration_suffix_heldout",
-            "seed": args.seed,
             "dev_blocks": len(dev_ids),
             "test_blocks": len(test_ids),
             "document_independence": (
@@ -340,7 +337,7 @@ def main() -> None:
         "selected_threshold": selected_threshold,
         "selected_gap_penalty": selected_gap_penalty,
         "selected_merge_penalty": selected_merge_penalty,
-        "calibration": {k: selected["best_on_dev"][k] for k in ("precision", "recall", "f1", "errors")},
+        "calibration": {k: selected["best_on_dev"][k] for k in ("exact_match_accuracy", "precision", "recall", "f1", "errors")},
         "heldout_baseline": report["heldout_baseline_default_parameters"],
         "heldout_test": report["heldout_test"],
         "heldout_improvement": report["heldout_improvement_over_baseline"],
