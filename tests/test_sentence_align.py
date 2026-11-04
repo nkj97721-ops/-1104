@@ -14,6 +14,12 @@ class SentenceAlignmentTests(unittest.TestCase):
         self.assertEqual(ALIGN.split_sentences("Hello world. 你好世界！Next?"),
                          ["Hello world.", "你好世界！", "Next?"])
 
+    def test_does_not_split_common_abbreviations_or_decimals(self):
+        self.assertEqual(
+            ALIGN.split_sentences("Dr. Smith paid 3.14 dollars. Next sentence."),
+            ["Dr. Smith paid 3.14 dollars.", "Next sentence."],
+        )
+
     def test_aligns_monotonic_one_to_one_pairs(self):
         result = ALIGN.align_sentence_embeddings([[1, 0], [0, 1]],
                                                   [[0.99, 0.01], [0.02, 0.98]],
