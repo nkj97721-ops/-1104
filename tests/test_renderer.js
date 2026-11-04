@@ -46,6 +46,11 @@ assert.equal(paragraphMismatch.pairs.length, 0);
 assert.equal(paragraphMismatch.errors.length, 1);
 assert.match(paragraphMismatch.errors[0], /第 1 段句子数量不一致/);
 
+const emptyInput = preparePairs("", "", "sentences");
+assert.equal(emptyInput.pairs.length, 0);
+assert.equal(emptyInput.errors.length, 1);
+assert.match(emptyInput.errors[0], /都必须填写/);
+
 const lineMismatch = preparePairs("English line one.\nEnglish line two.", "只有一行中文。", "lines");
 assert.equal(lineMismatch.pairs.length, 0);
 assert.equal(lineMismatch.errors.length, 1);
