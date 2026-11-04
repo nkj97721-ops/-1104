@@ -28,14 +28,16 @@ from prepare_opensubtitles2024_gold import split_aligned_lines
 
 
 def make_record(doc_id: str, movie_id: str, split: str,
-                pairs: list[tuple[str, str]], max_lines: int) -> list[dict[str, Any]]:
+                pairs: list[tuple[str, str]], max_lines: int,
+                boundary_ids: list[str]) -> list[dict[str, Any]]:
     records = []
     for chunk_no, start in enumerate(range(0, len(pairs), max_lines)):
         chunk = pairs[start:start + max_lines]
         source_lines = [x[0] for x in chunk]
         target_lines = [x[1] for x in chunk]
-        source, target, groups, unmatched_s, unmatched_t, oversize = split_aligned_lines(
-            source_lines, target_lines
+        chunk_boundary_ids = boundary_ids[start:start + len(chunk)]
+        source, target, groups, unmatched_s, unmatched_t, oversize, source_origins, target_origins = split_aligned_lines(
+            source_lines, target_lines, boundary_ids=chunk_boundary_ids
         )
         records.append({
             "id": f"{doc_id}-{chunk_no:04d}",
@@ -43,6 +45,9 @@ def make_record(doc_id: str, movie_id: str, split: str,
             "split": split,
             "source": source,
             "target": target,
+            "source_sentence_origins": source_origins,
+            "target_sentence_origins": target_origins,
+            "boundary_metadata_status": "preserved_original_parallel_segment_ids",
             "proposed_groups": groups,
             "proposed_unmatched_source": unmatched_s,
             "proposed_unmatched_target": unmatched_t,
@@ -101,6 +106,7 @@ def main() -> None:
             "calibration",
             chunk,
             args.max_segments_per_document,
+            [f"news-commentary-v16:row:{i}" for i in range(start, start + len(chunk))],
         ))
 
     # WMT17 official test: preserve document and segment order after joining
@@ -109,21 +115,23 @@ def main() -> None:
     source = parse_sgm_segments(source_sgm)
     target = parse_sgm_segments(target_sgm)
     matched = join_segment_pairs(source, target)
-    by_document: dict[str, list[tuple[str, str]]] = {}
+    by_document: dict[str, list[tuple[str, str, str]]] = {}
     test_counts = Counter()
     for (doc_id, segment_id), en_raw, zh_raw in matched:
         en, zh, reason = normalize_pair({"source": en_raw, "target": zh_raw}, converter)
         if reason:
             test_counts[reason] += 1
             continue
-        by_document.setdefault(doc_id, []).append((en, zh))
+        by_document.setdefault(doc_id, []).append((str(segment_id), en, zh))
     for doc_id in sorted(by_document):
+        rows = by_document[doc_id]
         records.extend(make_record(
             f"wmt17-{doc_id}",
             f"wmt17-document-{doc_id}",
             "test",
-            by_document[doc_id],
+            [(en, zh) for _, en, zh in rows],
             args.max_segments_per_document,
+            [f"wmt17:{doc_id}:segment:{segment_id}" for segment_id, _, _ in rows],
         ))
 
     if not any(x["split"] == "calibration" for x in records):
