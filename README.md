@@ -85,3 +85,24 @@ python tools/semantic_align.py \
 ## 自动构建
 
 GitHub Actions 会在生成器、样例或测试变化时运行语法检查、配对输入单元测试、真实字体构建和轮廓校验，并上传 TTF、映射 JSON 与 PUA 编码 TXT。
+
+
+## 整段自动语义对齐（第二阶段）
+
+新增 `tools/align_document.py`。输入完整英文段落和中文段落，不要求两侧句子数量相同。流程：
+
+1. 使用 multilingual BERT 的句向量计算跨语言相似度。
+2. 使用单调动态规划，寻找全局最优句子对应，支持 1:1、1:2、2:1；明显不相关或多余的句子会标记为未匹配。
+3. 将匹配后的句组批量交给 AWESOME-align 做词级对齐，再提取短语候选。
+4. 输出结构与原浏览器候选导入格式兼容的 JSON；未匹配句子单独列出。
+
+运行：
+
+```bash
+python tools/align_document.py \
+  --en "The first sentence explains the idea. A second sentence adds detail." \
+  --zh "第二句话补充了细节。第一句话解释了这个想法。" \
+  --output document-alignment.json
+```
+
+注意：当前句子匹配保持原文顺序，不会任意重排；句向量相似度和对齐分数都不是翻译正确概率。句子层可以识别不同数量及 1:2/2:1 分组，但真实语料准确率仍需基准测试。句级与词级模型均在本地运行；首次下载模型后可使用缓存。
