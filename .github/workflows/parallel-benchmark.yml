@@ -52,6 +52,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_sentence*.py' -v
           python -m unittest discover -s tests -p 'test_download_parallel_corpus.py' -v
           python -m unittest discover -s tests -p 'test_wmt17_test.py' -v
+          python -m unittest discover -s tests -p 'test_benchmark_parallel.py' -v
 
       - name: Download paired WMT News Commentary v16 TSV
         run: |
