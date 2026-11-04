@@ -60,10 +60,8 @@ def join_segment_pairs(
             "WMT17 source/reference segment IDs do not match; refusing index-based pairing. "
             f"Missing target IDs: {missing_target}; missing source IDs: {missing_source}"
         )
-    def sort_key(key):
-        doc_id, seg_id = key
-        return doc_id, (0, int(seg_id)) if seg_id.isdigit() else (1, seg_id)
-    return [(key, source[key], target[key]) for key in sorted(source, key=sort_key)]
+    # Dict insertion order preserves the original document and segment order.
+    return [(key, source[key], target[key]) for key in source]
 
 
 def read_archive_members() -> tuple[str, str]:
