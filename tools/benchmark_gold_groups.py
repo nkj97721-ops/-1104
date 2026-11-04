@@ -23,7 +23,12 @@ except ImportError:  # Direct execution: python tools/benchmark_gold_groups.py
     from sentence_align import align_sentence_embeddings, clear_model_cache, encode_sentences
 
 
-def load_documents(path: Path) -> list[dict[str, Any]]:
+def load_documents(
+    path: Path,
+    min_calibration_documents: int = 1,
+    min_test_documents: int = 1,
+    min_movies_per_split: int = 1,
+) -> list[dict[str, Any]]:
     documents = []
     seen_ids = set()
     movie_splits: dict[str, str] = {}
@@ -88,8 +93,27 @@ def load_documents(path: Path) -> list[dict[str, Any]]:
         raise ValueError("No annotated documents found")
     if not any(x["split"] == "calibration" for x in documents):
         raise ValueError("At least one calibration document is required")
-    if not any(x["split"] == "test" for x in documents):
-        raise ValueError("At least one independent test document is required")
+    calibration_docs = [x for x in documents if x["split"] == "calibration"]
+    test_docs = [x for x in documents if x["split"] == "test"]
+    if len(calibration_docs) < min_calibration_documents:
+        raise ValueError(
+            f"Need at least {min_calibration_documents} human-reviewed calibration documents; "
+            f"found {len(calibration_docs)}"
+        )
+    if len(test_docs) < min_test_documents:
+        raise ValueError(
+            f"Need at least {min_test_documents} human-reviewed independent test documents; "
+            f"found {len(test_docs)}"
+        )
+    for split_name, split_docs in (("calibration", calibration_docs), ("test", test_docs)):
+        independent_units = {
+            str(x.get("movie_id") or x["id"]) for x in split_docs
+        }
+        if len(independent_units) < min_movies_per_split:
+            raise ValueError(
+                f"Need at least {min_movies_per_split} independent movie/document IDs in "
+                f"{split_name}; found {len(independent_units)}"
+            )
     return documents
 
 
@@ -228,10 +252,20 @@ def main() -> None:
     ap.add_argument("--thresholds", default="0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60")
     ap.add_argument("--gap-penalties", default="0.06,0.12,0.18,0.24")
     ap.add_argument("--merge-penalties", default="0.02,0.06,0.10,0.14")
+    ap.add_argument("--min-calibration-documents", type=int, default=10)
+    ap.add_argument("--min-test-documents", type=int, default=10)
+    ap.add_argument("--min-movies-per-split", type=int, default=3)
     ap.add_argument("--no-cuda", action="store_true")
     args = ap.parse_args()
 
-    docs = load_documents(Path(args.input))
+    if min(args.min_calibration_documents, args.min_test_documents, args.min_movies_per_split) < 1:
+        raise ValueError("Minimum sample requirements must be positive")
+    docs = load_documents(
+        Path(args.input),
+        min_calibration_documents=args.min_calibration_documents,
+        min_test_documents=args.min_test_documents,
+        min_movies_per_split=args.min_movies_per_split,
+    )
     dev = [x for x in docs if x["split"] == "calibration"]
     test = [x for x in docs if x["split"] == "test"]
     models = list(dict.fromkeys(x.strip() for x in args.models.split(",") if x.strip()))
