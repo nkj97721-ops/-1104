@@ -154,6 +154,11 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
     unmatched_predicted = len(pred_unmatched_s) + len(pred_unmatched_t)
     unmatched_gold = len(gold_unmatched_s) + len(gold_unmatched_t)
     breakdown = Counter(f"{len(si)}:{len(ti)}" for si, ti in predicted_groups)
+    predicted_by_type = Counter(f"{len(si)}:{len(ti)}" for si, ti in predicted_groups)
+    gold_by_type = Counter(f"{len(si)}:{len(ti)}" for si, ti in gold_groups)
+    correct_by_type = Counter(
+        f"{len(si)}:{len(ti)}" for si, ti in (predicted_groups & gold_groups)
+    )
     error_examples = []
     for si, ti in sorted(predicted_groups - gold_groups)[:10]:
         error_examples.append({
@@ -212,6 +217,14 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
         "correct_unmatched": unmatched_correct,
         "unmatched": prf(unmatched_correct, unmatched_predicted, unmatched_gold),
         "predicted_group_types": dict(breakdown),
+        "group_type_counts": {
+            group_type: {
+                "correct": correct_by_type[group_type],
+                "predicted": predicted_by_type[group_type],
+                "reference": gold_by_type[group_type],
+            }
+            for group_type in sorted(set(predicted_by_type) | set(gold_by_type))
+        },
         "error_examples": error_examples,
         "predicted": [
             {"source": list(si), "target": list(ti)}
@@ -228,16 +241,39 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
 
 def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     sums = Counter()
+    type_sums: dict[str, Counter] = {}
     for row in rows:
         for key in ("exact_groups", "predicted_groups", "gold_groups",
                     "correct_links", "predicted_links", "gold_links",
                     "correct_unmatched", "predicted_unmatched", "gold_unmatched"):
             sums[key] += row[key]
+        for group_type, counts in row.get("group_type_counts", {}).items():
+            bucket = type_sums.setdefault(group_type, Counter())
+            for key in ("correct", "predicted", "reference"):
+                bucket[key] += counts[key]
+    group_type_metrics = {
+        group_type: {
+            **prf(counts["correct"], counts["predicted"], counts["reference"]),
+            "counts": dict(counts),
+        }
+        for group_type, counts in sorted(type_sums.items())
+    }
+    if sums["gold_unmatched"] == 0:
+        unmatched_metrics = {
+            "status": "NOT_ESTIMABLE_NO_REFERENCE_UNMATCHED",
+            "precision": None, "recall": None, "f1": None,
+        }
+    else:
+        unmatched_metrics = {
+            "status": "ESTIMATED",
+            **prf(sums["correct_unmatched"], sums["predicted_unmatched"], sums["gold_unmatched"]),
+        }
     return {
         "documents": len(rows),
         "group": prf(sums["exact_groups"], sums["predicted_groups"], sums["gold_groups"]),
+        "group_type": group_type_metrics,
         "link": prf(sums["correct_links"], sums["predicted_links"], sums["gold_links"]),
-        "unmatched": prf(sums["correct_unmatched"], sums["predicted_unmatched"], sums["gold_unmatched"]),
+        "unmatched": unmatched_metrics,
         "counts": dict(sums),
     }
 
