@@ -202,6 +202,9 @@
   function render(options) {
     const { english, chinese, mode, container, enFont, zhFont, enSize, zhSize, gap } = options;
     const prepared = preparePairs(english, chinese, mode);
+    if (!prepared.errors.length && !prepared.pairs.length) {
+      prepared.errors.push("没有可排版的配对内容，请填写英文和对应中文。");
+    }
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const width = Math.max(1, container.clientWidth - 2);
