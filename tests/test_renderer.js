@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const {
   wrapText, wrapPair, splitOneLine, paragraphBlocks, lineBlocks,
-  splitSentences, preparePairs
+  splitSentences, preparePairs, phraseLines
 } = require("../specimen/renderer.js");
 
 const measure = text => Array.from(text).length * 10;
@@ -20,6 +20,31 @@ assert.deepEqual(clauseLines, ["First clause,", "second clause continues"]);
 const chineseClauseLines = ["第一部分，第二部分继续"];
 assert.equal(splitOneLine(chineseClauseLines, measure), true);
 assert.deepEqual(chineseClauseLines, ["第一部分，", "第二部分继续"]);
+
+assert.deepEqual(phraseLines("take | a closer look\\nat | the issue"), [
+  { line: 1, parts: ["take", "a closer look"] },
+  { line: 2, parts: ["at", "the issue"] }
+]);
+const phrasePairs = preparePairs(
+  "take | a closer look | at the issue",
+  "仔细 | 看一看 | 这个问题",
+  "phrases"
+);
+assert.equal(phrasePairs.errors.length, 0);
+assert.deepEqual(phrasePairs.pairs.map(x => [x.en, x.zh]), [
+  ["take", "仔细"], ["a closer look", "看一看"], ["at the issue", "这个问题"]
+]);
+assert.ok(phrasePairs.pairs.every(x => x.source === "phrase"));
+const phraseMismatch = preparePairs(
+  "take | a closer look",
+  "仔细 | 看一看 | 这个问题",
+  "phrases"
+);
+assert.equal(phraseMismatch.pairs.length, 0);
+assert.match(phraseMismatch.errors[0], /短语数量不一致/);
+const phraseLineMismatch = preparePairs("one | two\\nthree", "一 | 二", "phrases");
+assert.equal(phraseLineMismatch.pairs.length, 0);
+assert.match(phraseLineMismatch.errors[0], /句子行数相同/);
 
 const sentenceEn = "The first sentence is here. The second sentence follows!";
 const sentenceZh = "第一句话在这里。第二句话紧随其后！";
