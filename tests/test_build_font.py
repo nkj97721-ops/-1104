@@ -1,7 +1,7 @@
 import unittest
 
 from build_font import (MAX_GLYPH_ADVANCE, MAX_PAIRS, PUA_START, composite_advance_width,
-                        expand_pairs, split_text_to_width, validate_pairs)
+                        expand_pairs, split_line_in_two, split_text_to_width, validate_pairs)
 
 
 class ValidatePairsTests(unittest.TestCase):
@@ -34,6 +34,15 @@ class ValidatePairsTests(unittest.TestCase):
     def test_rejects_glyph_that_cannot_fit_true_type_advance_field(self):
         with self.assertRaisesRegex(ValueError, "too wide for a TrueType glyph"):
             composite_advance_width(70000, 1000, 3)
+
+    def test_split_line_prefers_whole_word_boundaries(self):
+        text = "hello world"
+        cmap = {ord(c): c for c in text}
+        metrics = {c: (1000, 0) for c in set(cmap.values())}
+        left, right = split_line_in_two(text, cmap, metrics, 1.0)
+        self.assertEqual(left.rstrip(), "hello")
+        self.assertEqual(right, "world")
+        self.assertEqual(left + right, text)
 
     def test_wraps_english_at_word_boundaries(self):
         cmap = {ord(c): c for c in "hello world"}
