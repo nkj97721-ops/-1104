@@ -110,11 +110,19 @@ def main() -> None:
     if not test_ids:
         raise ValueError("测试集为空；请增加语料或减小 block-size。")
 
-    # Encode each block independently so a document boundary is never crossed.
+    # Load the transformer once. Keep block boundaries intact during scoring.
+    all_texts = [x[0] for x in pairs] + [x[1] for x in pairs]
+    all_vectors = encode_sentences(all_texts, args.model, args.no_cuda)
+    pair_count = len(pairs)
     encoded: dict[int, list[list[float]]] = {}
+    offset = 0
     for index, block in enumerate(blocks):
-        texts = [x[0] for x in block] + [x[1] for x in block]
-        encoded[index] = encode_sentences(texts, args.model, args.no_cuda)
+        size = len(block)
+        encoded[index] = (
+            all_vectors[offset:offset + size]
+            + all_vectors[pair_count + offset:pair_count + offset + size]
+        )
+        offset += size
 
     thresholds = sorted({float(x) for x in args.thresholds.split(",")})
     if any(not 0.0 <= x <= 1.0 for x in thresholds):
