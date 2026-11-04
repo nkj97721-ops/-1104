@@ -36,6 +36,20 @@ class SentenceAlignmentTests(unittest.TestCase):
         self.assertEqual(result["unmatched_source"], [0])
         self.assertEqual(result["unmatched_target"], [0])
 
+    def test_rejects_mismatched_vector_dimensions(self):
+        with self.assertRaisesRegex(ValueError, "dimension"):
+            ALIGN.align_sentence_embeddings([[1, 0]], [[1, 0, 0]])
+
+    def test_rejects_invalid_threshold(self):
+        with self.assertRaisesRegex(ValueError, "threshold"):
+            ALIGN.align_sentence_embeddings([[1, 0]], [[1, 0]], threshold=1.5)
+
+    def test_rejects_wrong_similarity_table_shape(self):
+        with self.assertRaisesRegex(ValueError, "shape"):
+            ALIGN.align_sentence_embeddings(
+                [[1, 0]], [[1, 0]], similarity_tables=([[1, 0]], [[1]], [[1]])
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
