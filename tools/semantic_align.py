@@ -42,10 +42,17 @@ def tokenize_chinese(text: str) -> list[str]:
 
 def parse_links(link_line: str, probability_line: str, src_len: int, tgt_len: int) -> list[dict[str, Any]]:
     raw_links = link_line.strip().split()
-    # Upstream writes tensor reprs containing spaces; extract one scalar per tensor.
+    # Upstream writes tensor reprs containing spaces; remove the whole repr
+    # before parsing any bare scalar values that may follow it on the same line.
     number = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
-    tensor_values = re.findall(r"tensor\(\s*(" + number + r")", probability_line)
-    raw_probs = tensor_values or (re.findall(number, probability_line) if probability_line.strip() else [])
+    tensor_parts = re.findall(r"tensor\(([^)]*)\)", probability_line)
+    raw_probs = []
+    for part in tensor_parts:
+        scalar = re.search(number, part)
+        if scalar:
+            raw_probs.append(scalar.group())
+    remainder = re.sub(r"tensor\([^)]*\)", " ", probability_line)
+    raw_probs.extend(re.findall(number, remainder))
     if raw_probs and len(raw_probs) != len(raw_links):
         raise ValueError("模型输出的对齐链接数与概率数不一致。")
     links = []
