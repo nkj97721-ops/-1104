@@ -1,0 +1,3 @@
+# Install the local bilingual alignment engine (CPU or CUDA PyTorch).
+jieba>=0.42.1
+git+https://github.com/neulab/awesome-align.git
