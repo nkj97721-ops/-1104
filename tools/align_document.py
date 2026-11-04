@@ -124,7 +124,7 @@ def main() -> None:
     parser.add_argument("--en", required=True, help="English text block")
     parser.add_argument("--zh", required=True, help="Chinese text block")
     parser.add_argument("--output", default="alignment.json")
-    parser.add_argument("--sentence-model", default="bert-base-multilingual-cased")
+    parser.add_argument("--sentence-model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     parser.add_argument("--word-model", default="bert-base-multilingual-cased")
     parser.add_argument("--threshold", type=float, default=0.35)
     parser.add_argument("--no-cuda", action="store_true")
