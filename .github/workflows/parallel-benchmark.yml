@@ -1,0 +1,75 @@
+name: Parallel corpus benchmark
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/**"
+      - "tests/**"
+      - ".github/workflows/parallel-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parallel-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-parallel-benchmark-v1-${{ runner.os }}-py311
+
+      - name: Install CPU inference dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install "sentence-transformers>=3.0,<4"
+
+      - name: Run alignment regression tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Download OPUS TED2020 corpus
+        run: |
+          python tools/download_parallel_corpus.py \
+            --output data/ted2020-en-zh.tsv \
+            --limit 10000
+
+      - name: Compare models and tune threshold plus DP penalties
+        run: |
+          mkdir -p reports
+          python tools/benchmark_parallel.py \
+            --input data/ted2020-en-zh.tsv \
+            --models sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE \
+            --block-size 20 \
+            --thresholds 0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60 \
+            --gap-penalties 0.06,0.12,0.18,0.24 \
+            --merge-penalties 0.02,0.06,0.10,0.14 \
+            --output reports/ted2020-benchmark.json
+
+      - name: Upload corpus benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ted2020-parallel-benchmark
+          path: |
+            reports/
+            data/ted2020-en-zh.tsv
+          if-no-files-found: warn
+          retention-days: 30
