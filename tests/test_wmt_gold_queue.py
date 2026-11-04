@@ -23,7 +23,7 @@ class WMTGoldQueueTests(unittest.TestCase):
             [(x["source"], x["target"]) for x in record["proposed_groups"]],
             [([0, 1], [0]), ([2], [1, 2])],
         )
-        self.assertEqual(record["annotation_status"], "pending_human_review")
+        self.assertEqual(record["reference_status"], "automatic_silver_reference")
 
 
 if __name__ == "__main__":
