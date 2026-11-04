@@ -12,6 +12,9 @@ One JSON object per document:
 {
   "id": "doc-001",
   "split": "calibration",
+  "annotation_status": "human_verified",
+  "annotator": "reviewer-id",
+  "reviewed_at": "2026-11-04T20:00:00+08:00",
   "source": ["English sentence one.", "English sentence two."],
   "target": ["第一句中文。", "第二句中文。", "第三句中文。"],
   "gold": [
@@ -52,8 +55,24 @@ then evaluates the frozen parameters on test documents once. It reports:
 3. Unmatched-sentence precision/recall/F1.
 4. Per-document predicted and gold groups for error inspection.
 
-The benchmark does not manufacture annotations from the legacy TSV. Until a
-representative human-reviewed calibration set and independent test set exist,
-no new aggregate accuracy should be described as a validated real-world score.
+The benchmark does not manufacture annotations from silver subtitle timing
+links or the legacy TSV. Until a representative human-reviewed calibration
+set and independent test set exist, no aggregate score should be described as
+validated real-world accuracy.
+
+## Real-corpus workflow
+
+- `tools/prepare_opensubtitles2024_gold.py` downloads the official English /
+  Simplified Chinese (`zh_CN`) OpenSubtitles2024 multilingual set and creates
+  a review queue. The upstream automatic subtitle-timing links are proposals,
+  never human gold.
+- `tools/review_gold_queue.py` presents each document and requires an
+  annotator to inspect the English and Simplified Chinese text before accepting
+  or editing the proposed groups.
+- `tools/benchmark_silver_groups.py` compares MiniLM and LaBSE against the
+  automatic timing links as a preliminary diagnostic only.
+- `tools/benchmark_gold_groups.py` is the final benchmark and refuses records
+  that do not explicitly carry `annotation_status=human_verified`,
+  `annotator`, and `reviewed_at`.
 
 Both MiniLM and LaBSE are calibrated independently by default and each is evaluated on the same held-out documents. The deployable candidate is selected using calibration scores only; held-out scores are never used for model selection.
