@@ -102,7 +102,7 @@ def extract_phrase_candidates(source: list[str], target: list[str],
                 continue
             min_target, max_target = min(aligned_targets), max(aligned_targets)
             for tgt_start in range(max(0, min_target - 2), min_target + 1):
-                for tgt_end in range(max_target, min(len(target), max_target + max_target_tokens - (max_target - min_target + 1))):
+                for tgt_end in range(max_target, min(len(target), max_target + max_target_tokens - (max_target - min_target + 1) + 1)):
                     if tgt_end - tgt_start + 1 > max_target_tokens:
                         continue
                     # Consistency: no target token in the candidate span may
@@ -140,6 +140,7 @@ def extract_phrase_candidates(source: list[str], target: list[str],
                         "score": round(score, 4),
                         "coverage": round(coverage, 4),
                         "alignment_score": round(mean_alignment, 4),
+                        "confidence_band": "high" if score >= 0.75 else ("medium" if score >= 0.45 else "low"),
                     }
     return sorted(candidates.values(), key=lambda item: (
         -item["score"], item["source_span"][0], item["target_span"][0]
