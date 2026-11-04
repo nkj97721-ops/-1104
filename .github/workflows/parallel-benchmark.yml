@@ -45,14 +45,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install "sentence-transformers>=3.0,<4" "datasets>=3,<5" opencc-python-reimplemented
+          python -m pip install "sentence-transformers>=3.0,<4" opencc-python-reimplemented
 
       - name: Run alignment regression tests
         run: |
           python -m unittest discover -s tests -p 'test_sentence*.py' -v
           python -m unittest discover -s tests -p 'test_download_parallel_corpus.py' -v
 
-      - name: Stream OPUS OpenSubtitles English–Simplified-Chinese paired records
+      - name: Fetch paired OPUS OpenSubtitles rows through the Dataset Viewer API
         run: |
           python tools/download_parallel_corpus.py \
             --output data/opensubtitles-en-zh-cn.tsv \
