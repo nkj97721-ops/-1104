@@ -45,12 +45,12 @@ def build_similarity_tables(source_vectors, target_vectors):
     target_pairs = target_pairs / np.maximum(
         np.linalg.norm(target_pairs, axis=1, keepdims=True), 1e-12
     )
-    return (
+    return tuple(np.clip(table, -1.0, 1.0) for table in (
         source @ target.T,
         source @ target_pairs.T,
         source_pairs @ target.T,
         source_pairs @ target_pairs.T,
-    )
+    ))
 
 
 def align_sentence_embeddings(
