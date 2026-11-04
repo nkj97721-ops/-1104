@@ -12,7 +12,7 @@ class SpecimenTests(unittest.TestCase):
 
     def test_supports_paragraph_pairing_and_responsive_wrap(self):
         self.assertIn('value="paragraphs"', self.html)
-        self.assertIn(r"raw.split(/\\n\\s*\\n+/)", self.html)
+        self.assertIn(r"raw.split(/\n\s*\n+/)", self.html)
         self.assertIn("overflow-wrap:anywhere", self.html)
         self.assertIn("TwinLine-layout.html", self.html)
 
