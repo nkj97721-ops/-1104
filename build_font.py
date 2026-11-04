@@ -29,7 +29,7 @@ def validate_pairs(pairs):
             value = pair.get(key)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"Pair {index}: '{key}' must be a non-empty string")
-            if "\\n" in value or "\\r" in value:
+            if "\n" in value or "\r" in value:
                 raise ValueError(f"Pair {index}: '{key}' must be one line; split paragraphs into paired lines")
 
 
@@ -155,7 +155,7 @@ def build(pairs, output, family, encoded_output=None):
     mapping_path = output.with_suffix(".mapping.json")
     mapping_path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
     encoded_output.parent.mkdir(parents=True, exist_ok=True)
-    encoded_output.write_text("\\n".join(encoded_chars) + "\\n", encoding="utf-8")
+    encoded_output.write_text("\n".join(encoded_chars) + "\n", encoding="utf-8")
 
     check = TTFont(output)
     glyph_set = check.getGlyphSet()
