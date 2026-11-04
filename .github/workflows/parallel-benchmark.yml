@@ -68,7 +68,7 @@ jobs:
             --thresholds 0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60 \
             --gap-penalties 0.06,0.12,0.18,0.24 \
             --merge-penalties 0.02,0.06,0.10,0.14 \
-            --output reports/opensubtitles-zh-cn-benchmark.json
+            --output reports/news-commentary-en-zh-benchmark.json
 
       - name: Upload corpus benchmark report
         if: always()
