@@ -155,9 +155,10 @@
   }
 
   function phraseLines(value) {
-    return value.replace(/\\r/g, "").split("\\n")
-      .map((line, index) => ({ line: index + 1, parts: line.split("|").map(part => part.trim()) }))
-      .filter(item => item.parts.some(Boolean));
+    // Normalize real CRLF/CR line endings; never discard blank rows because
+    // dropping one side would silently shift every following bilingual pair.
+    return value.replace(/\\r\\n?/g, "\\n").split("\\n")
+      .map((line, index) => ({ line: index + 1, parts: line.split("|").map(part => part.trim()) }));
   }
 
   function splitSentences(value) {
