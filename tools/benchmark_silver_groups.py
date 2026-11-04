@@ -67,8 +67,23 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         keep_t = sorted(used_t | unmatched_t)
         map_s = {old: new for new, old in enumerate(keep_s)}
         map_t = {old: new for new, old in enumerate(keep_t)}
+        original_source_count, original_target_count = len(item["source"]), len(item["target"])
         item["source"] = [item["source"][i] for i in keep_s]
         item["target"] = [item["target"][i] for i in keep_t]
+        for metadata_key, keep_indices, original_count in (
+            ("source_sentence_origins", keep_s, original_source_count),
+            ("target_sentence_origins", keep_t, original_target_count),
+        ):
+            origins = item.get(metadata_key)
+            if origins is not None:
+                if not isinstance(origins, list) or len(origins) != original_count:
+                    raise ValueError(
+                        f"{item['id']}: {metadata_key} must contain one origin per original sentence"
+                    )
+                item[metadata_key] = [
+                    {**origins[old_index], "sentence_index": new_index}
+                    for new_index, old_index in enumerate(keep_indices)
+                ]
         item["_silver_groups_original"] = supported
         item["_gold_groups"] = [
             (tuple(map_s[i] for i in g["source"]),
@@ -105,6 +120,16 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         raise ValueError("Need supported candidate documents in both calibration and test movie splits")
     counts["calibration_documents_used"] = len(calibration)
     counts["test_documents_used"] = len(test)
+    counts["boundary_metadata_documents"] = sum(
+        bool(x.get("source_sentence_origins")) and bool(x.get("target_sentence_origins"))
+        for x in calibration + test
+    )
+    counts["source_sentence_origins_retained"] = sum(
+        len(x.get("source_sentence_origins", [])) for x in calibration + test
+    )
+    counts["target_sentence_origins_retained"] = sum(
+        len(x.get("target_sentence_origins", [])) for x in calibration + test
+    )
     sampled_types = {}
     for split_name, rows in (("calibration", calibration), ("test", test)):
         split_types = Counter(
@@ -231,6 +256,24 @@ def main() -> None:
     result = {
         "status": "AUTOMATIC_SILVER_REFERENCE_EVALUATION_NOT_HUMAN_GOLD",
         "reference_type": "Upstream automatic segment/subtitle alignment proposals; weak reference, not human-verified semantic gold",
+        "evaluation_tracks": {
+            "semantic_sentence_links": (
+                "Link F1 measures sentence-pair connectivity from embedding-only predictions; "
+                "it does not determine original subtitle/segment grouping."
+            ),
+            "original_boundary_grouping": (
+                "Exact group F1 measures agreement with upstream paired line/segment boundaries. "
+                "It is a boundary-provenance agreement score, not semantic-group accuracy."
+            ),
+            "model_input_isolation": (
+                "Original boundary IDs are retained for diagnostics but are not passed into "
+                "sentence embeddings or dynamic-programming transition scoring."
+            ),
+        },
+        "boundary_metadata_policy": (
+            "Per-sentence source/target boundary IDs are preserved through document filtering; "
+            "missing or mis-sized provenance arrays fail validation."
+        ),
         "languages": {"source": "English", "target": "Simplified Chinese (zh_CN)"},
         "split_unit": "whole movie IDs; no movie appears in both calibration and held-out splits",
         "counts": counts,
