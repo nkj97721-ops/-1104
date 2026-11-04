@@ -21,15 +21,15 @@ const chineseClauseLines = ["第一部分，第二部分继续"];
 assert.equal(splitOneLine(chineseClauseLines, measure), true);
 assert.deepEqual(chineseClauseLines, ["第一部分，", "第二部分继续"]);
 
-assert.deepEqual(phraseLines("take | a closer look\\nat | the issue"), [
+assert.deepEqual(phraseLines("take | a closer look\nat | the issue"), [
   { line: 1, parts: ["take", "a closer look"] },
   { line: 2, parts: ["at", "the issue"] }
 ]);
-assert.deepEqual(phraseLines("take | a closer look\\r\\nat | the issue"), [
+assert.deepEqual(phraseLines("take | a closer look\r\nat | the issue"), [
   { line: 1, parts: ["take", "a closer look"] },
   { line: 2, parts: ["at", "the issue"] }
 ]);
-assert.deepEqual(phraseLines("one | two\\n\\nthree"), [
+assert.deepEqual(phraseLines("one | two\n\nthree"), [
   { line: 1, parts: ["one", "two"] },
   { line: 2, parts: [""] },
   { line: 3, parts: ["three"] }
@@ -51,10 +51,10 @@ const phraseMismatch = preparePairs(
 );
 assert.equal(phraseMismatch.pairs.length, 0);
 assert.match(phraseMismatch.errors[0], /短语数量不一致/);
-const phraseLineMismatch = preparePairs("one | two\\nthree", "一 | 二", "phrases");
+const phraseLineMismatch = preparePairs("one | two\nthree", "一 | 二", "phrases");
 assert.equal(phraseLineMismatch.pairs.length, 0);
 assert.match(phraseLineMismatch.errors[0], /句子行数相同/);
-const phraseBlankLine = preparePairs("one | two\\n\\nthree", "一 | 二\\n\\n三", "phrases");
+const phraseBlankLine = preparePairs("one | two\n\nthree", "一 | 二\n\n三", "phrases");
 assert.equal(phraseBlankLine.pairs.length, 0);
 assert.ok(phraseBlankLine.errors.some(message => /短语为空/.test(message)));
 const phraseTrailingDelimiter = preparePairs("one |", "一 | 二", "phrases");
