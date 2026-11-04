@@ -27,6 +27,8 @@ class BoundaryProvenanceTests(unittest.TestCase):
             [x["boundary_id"] for x in target_origins],
             ["movie-7:line:10", "movie-7:line:11", "movie-7:line:11"],
         )
+        self.assertEqual([x["sentence_index"] for x in source_origins], [0, 1, 2])
+        self.assertEqual([x["sentence_index"] for x in target_origins], [0, 1, 2])
         self.assertEqual(
             [x["suggested_type"] for x in groups],
             ["2:1", "1:2"],

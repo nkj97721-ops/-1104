@@ -18,7 +18,8 @@ class OpenSubtitlesPreparationTests(unittest.TestCase):
         self.assertIsNone(identify_text_member("set/movie_123.yue"))
 
     def test_splits_multisentence_lines_independently_and_preserves_groups(self):
-        source, target, groups, unmatched_s, unmatched_t, oversize = split_aligned_lines(
+        (source, target, groups, unmatched_s, unmatched_t, oversize,
+         source_origins, target_origins) = split_aligned_lines(
             ["Hello. Goodbye.", "Wait!"],
             ["你好。", "等等！再见。"],
         )
@@ -31,6 +32,8 @@ class OpenSubtitlesPreparationTests(unittest.TestCase):
         self.assertEqual(unmatched_s, [])
         self.assertEqual(unmatched_t, [])
         self.assertEqual(oversize, 0)
+        self.assertEqual([x["sentence_index"] for x in source_origins], [0, 1, 2])
+        self.assertEqual([x["sentence_index"] for x in target_origins], [0, 1, 2])
 
     def test_rejects_line_count_mismatch(self):
         with self.assertRaisesRegex(ValueError, "line counts"):

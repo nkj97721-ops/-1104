@@ -14,6 +14,7 @@ class WMTGoldQueueTests(unittest.TestCase):
                 ("Wait?", "等等？再见。"),
             ],
             10,
+            ["wmt17:doc-1:segment:4", "wmt17:doc-1:segment:9"],
         )
         self.assertEqual(len(records), 1)
         record = records[0]

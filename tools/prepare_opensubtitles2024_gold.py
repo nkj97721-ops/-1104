@@ -111,11 +111,11 @@ def split_aligned_lines(
         boundary_id = str(boundary_ids[line_index])
         source_sentence_origins.extend(
             {"boundary_id": boundary_id, "boundary_index": line_index, "sentence_index": i}
-            for i in range(len(src))
+            for i in src_indices
         )
         target_sentence_origins.extend(
             {"boundary_id": boundary_id, "boundary_index": line_index, "sentence_index": i}
-            for i in range(len(trg))
+            for i in trg_indices
         )
 
         if src_indices and trg_indices:
