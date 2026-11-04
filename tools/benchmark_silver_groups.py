@@ -10,6 +10,7 @@ import argparse
 import itertools
 import json
 from pathlib import Path
+from collections import Counter
 from typing import Any
 
 try:
@@ -20,9 +21,13 @@ except ImportError:
     from sentence_align import clear_model_cache, encode_sentences
 
 
-def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], dict[str, int]]:
+def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     calibration, test = [], []
-    counts = {"input_documents": 0, "excluded_oversize": 0, "excluded_empty": 0}
+    counts: dict[str, Any] = {
+        "input_documents": 0, "excluded_oversize": 0,
+        "excluded_oversize_groups": 0, "excluded_empty": 0,
+    }
+    supported_group_types = Counter()
     for line in path.read_text(encoding="utf-8-sig").splitlines():
         if not line.strip():
             continue
@@ -34,9 +39,17 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         if not groups:
             counts["excluded_empty"] += 1
             continue
-        if any(len(g["source"]) not in (1, 2) or len(g["target"]) not in (1, 2) for g in groups):
+        oversized = [
+            g for g in groups
+            if len(g["source"]) not in (1, 2) or len(g["target"]) not in (1, 2)
+        ]
+        if oversized:
             counts["excluded_oversize"] += 1
+            counts["excluded_oversize_groups"] += len(oversized)
             continue
+        supported_group_types.update(
+            f'{len(g["source"])}:{len(g["target"])}' for g in groups
+        )
         item["_gold_groups"] = [
             (tuple(g["source"]), tuple(g["target"])) for g in groups
         ]
@@ -78,6 +91,7 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         raise ValueError("Need supported candidate documents in both calibration and test movie splits")
     counts["calibration_documents_used"] = len(calibration)
     counts["test_documents_used"] = len(test)
+    counts["supported_group_types"] = dict(supported_group_types)
     return calibration + test, counts
 
 
