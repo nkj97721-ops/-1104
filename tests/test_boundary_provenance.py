@@ -34,6 +34,22 @@ class BoundaryProvenanceTests(unittest.TestCase):
         self.assertEqual(groups[0]["source_boundary_ids"], ["movie-7:line:10"])
         self.assertEqual(groups[0]["target_boundary_ids"], ["movie-7:line:10"])
 
+    def test_boundary_groups_are_reconstructed_separately(self):
+        from tools.boundary_groups import reconstruct_boundary_groups
+
+        _, _, _, _, _, _, source_origins, target_origins = split_aligned_lines(
+            ["First. Second.", "Third."],
+            ["第一句。", "第二句。第三句。"],
+            boundary_ids=["movie:line:1", "movie:line:2"],
+        )
+        result = reconstruct_boundary_groups(source_origins, target_origins)
+        self.assertEqual(
+            [(x["type"], x["source"], x["target"]) for x in result["groups"]],
+            [("2:1", [0, 1], [0]), ("1:2", [2], [1, 2])],
+        )
+        self.assertEqual(result["unmatched_source"], [])
+        self.assertEqual(result["unmatched_target"], [])
+
     def test_duplicate_boundary_ids_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "unique ID"):
             split_aligned_lines(["One.", "Two."], ["一。", "二。"],
