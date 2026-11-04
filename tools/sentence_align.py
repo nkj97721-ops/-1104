@@ -52,6 +52,22 @@ def align_sentence_embeddings(
         raise ValueError("merge_penalty must be finite and non-negative")
 
     n, m = len(source_vectors), len(target_vectors)
+    vectors = list(source_vectors) + list(target_vectors)
+    dimensions = {len(vector) for vector in vectors}
+    if len(dimensions) > 1 or (dimensions and 0 in dimensions):
+        raise ValueError("All sentence vectors must have the same non-zero dimension")
+    if any(not math.isfinite(float(value)) for vector in vectors for value in vector):
+        raise ValueError("Sentence vectors must contain only finite values")
+
+    if similarity_tables is not None:
+        expected_shapes = ((n, m), (n, max(0, m - 1)), (max(0, n - 1), m))
+        for table, expected in zip(similarity_tables, expected_shapes):
+            shape = getattr(table, "shape", None)
+            if shape is None:
+                shape = (len(table), len(table[0]) if len(table) else 0)
+            if tuple(shape) != expected:
+                raise ValueError(f"Similarity table shape {tuple(shape)} does not match {expected}")
+
     neg_inf = float("-inf")
     dp = [[neg_inf] * (m + 1) for _ in range(n + 1)]
     back = [[None] * (m + 1) for _ in range(n + 1)]
