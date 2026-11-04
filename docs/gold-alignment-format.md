@@ -24,9 +24,10 @@ One JSON object per document:
 - `source` and `target` are independently segmented sentence arrays.
 - All indices are zero-based.
 - Each gold item is one alignment group, not one individual sentence pair.
-- Supported group shapes are 1:1, 1:2 and 2:1. Groups must be contiguous and
+- Supported group shapes are 1:1, 1:2, 2:1 and 2:2. Groups must be contiguous and
   monotonic; a sentence cannot occur in more than one group.
 - Sentences omitted from every gold group are treated as explicitly unmatched.
+- `annotation_status` must be `human_verified`, with a non-empty `annotator` and `reviewed_at` field. Suggested/automatic labels must never be copied into `gold` without human review.
 - `split` must be `calibration` or `test`. Keep test documents separate from
   all parameter selection. Prefer different source documents, not merely
   different sentence windows from the same document.
