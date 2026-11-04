@@ -18,10 +18,10 @@ from download_parallel_corpus import normalize_pair
 ARCHIVE_URL = "https://data.statmt.org/wmt17/translation-task/test-update-1.tgz"
 SOURCE_FILE = "newstest2017-enzh-src.en.sgm"
 TARGET_FILE = "newstest2017-enzh-ref.zh.sgm"
-DOC_RE = re.compile(r"<doc\\b([^>]*)>(.*?)</doc>", re.IGNORECASE | re.DOTALL)
-SEG_RE = re.compile(r"<seg\\b([^>]*)>(.*?)</seg>", re.IGNORECASE | re.DOTALL)
-DOC_ID_RE = re.compile(r'\\bdocid=["\']([^"\']+)["\']', re.IGNORECASE)
-SEG_ID_RE = re.compile(r'\\bid=["\']([^"\']+)["\']', re.IGNORECASE)
+DOC_RE = re.compile(r"<doc\b([^>]*)>(.*?)</doc>", re.IGNORECASE | re.DOTALL)
+SEG_RE = re.compile(r"<seg\b([^>]*)>(.*?)</seg>", re.IGNORECASE | re.DOTALL)
+DOC_ID_RE = re.compile(r'\bdocid=["\']([^"\']+)["\']', re.IGNORECASE)
+SEG_ID_RE = re.compile(r'\bid=["\']([^"\']+)["\']', re.IGNORECASE)
 TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -43,7 +43,7 @@ def parse_sgm_segments(content: str) -> dict[tuple[str, str], str]:
             if key in segments:
                 raise ValueError(f"Duplicate SGM segment ID: {key}")
             if text:
-                segments[key] = re.sub(r"\\s+", " ", text)
+                segments[key] = re.sub(r"\s+", " ", text)
     if not segments:
         raise ValueError("No SGM segments were parsed.")
     return segments
@@ -112,7 +112,7 @@ def download_test_pairs(output: Path) -> dict[str, Any]:
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(output.name + ".partial")
     try:
-        with temporary.open("w", encoding="utf-8", newline="\\n") as stream:
+        with temporary.open("w", encoding="utf-8", newline="\n") as stream:
             for key, source_text, target_text in matched_pairs:
                 en, zh, reason = normalize_pair(
                     {"source": source_text, "target": target_text}, converter
@@ -120,7 +120,7 @@ def download_test_pairs(output: Path) -> dict[str, Any]:
                 if reason:
                     counters[reason] += 1
                     continue
-                stream.write(en + "\\t" + zh + "\\n")
+                stream.write(en + "\t" + zh + "\n")
                 counters["written"] += 1
         if counters["written"] < 100:
             raise RuntimeError(f"Only {counters['written']} valid WMT17 pairs were produced.")
@@ -139,7 +139,7 @@ def download_test_pairs(output: Path) -> dict[str, Any]:
         "output": str(output),
     }
     output.with_suffix(output.suffix + ".manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     return manifest
 
