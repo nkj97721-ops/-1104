@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import random
+import math
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -122,6 +122,7 @@ def evaluate_block(block: list[tuple[str, str]], vectors: list[list[float]],
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
         "sentence_count": n, "exact_pairs": exact,
+        "exact_match_accuracy": recall,
         "precision": precision, "recall": recall, "f1": f1,
         "errors": dict(counts), "objective_score": result["objective_score"],
         "examples": examples,
@@ -138,6 +139,7 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     r = exact / total_n if total_n else 0.0
     return {
         "blocks": len(rows), "gold_pairs": total_n, "exact_pairs": exact,
+        "exact_match_accuracy": round(r, 6),
         "precision": round(p, 6), "recall": round(r, 6),
         "f1": round(2*p*r/(p+r), 6) if p+r else 0.0,
         "errors": dict(sum((Counter(x["errors"]) for x in rows), Counter())),
@@ -158,49 +160,52 @@ def main() -> None:
     ap.add_argument("--thresholds", default="0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60")
     ap.add_argument("--gap-penalties", default="0.06,0.12,0.18,0.24")
     ap.add_argument("--merge-penalties", default="0.02,0.06,0.10,0.14")
-    ap.add_argument("--seed", type=int, default=1104)
     ap.add_argument("--no-cuda", action="store_true")
     args = ap.parse_args()
 
+    if args.block_size < 2:
+        raise ValueError("--block-size 必须至少为 2。")
     pairs = load_pairs(Path(args.input), args.limit)
     blocks = make_blocks(pairs, args.block_size)
     if len(blocks) < 5:
         raise ValueError("至少需要 5 个完整测试块，建议准备 500 条以上平行句对。")
-    order = list(range(len(blocks)))
-    random.Random(args.seed).shuffle(order)
-    dev_count = max(1, round(len(order) * 0.2))
-    dev_ids, test_ids = set(order[:dev_count]), set(order[dev_count:])
+    # Keep the source order intact: a contiguous held-out tail is less likely
+    # to share adjacent subtitle context with calibration than random blocks.
+    dev_count = max(1, round(len(blocks) * 0.2))
+    dev_ids = set(range(dev_count))
+    test_ids = set(range(dev_count, len(blocks)))
     if not test_ids:
         raise ValueError("测试集为空；请增加语料或减小 block-size。")
 
     thresholds = sorted({float(x) for x in args.thresholds.split(",")})
-    if any(not 0.0 <= x <= 1.0 for x in thresholds):
-        raise ValueError("阈值必须位于 0 到 1 之间。")
+    if not thresholds or any(not math.isfinite(x) or not -1.0 <= x <= 1.0 for x in thresholds):
+        raise ValueError("阈值必须是 [-1, 1] 内的有限余弦相似度。")
 
     model_names = [x.strip() for x in args.models.split(",") if x.strip()]
     if not model_names:
         raise ValueError("至少指定一个句向量模型。")
     all_texts = [x[0] for x in pairs] + [x[1] for x in pairs]
     model_calibrations = []
-    model_vectors: dict[str, list[list[float]]] = {}
+    import numpy as np
+    model_vectors: dict[str, Any] = {}
     for model_name in model_names:
         # One model load/encoding pass per candidate model.
         all_vectors = encode_sentences(all_texts, model_name, args.no_cuda)
         model_vectors[model_name] = all_vectors
         pair_count = len(pairs)
-        encoded: dict[int, list[list[float]]] = {}
+        encoded: dict[int, Any] = {}
         offset = 0
         for index, block in enumerate(blocks):
             size = len(block)
-            encoded[index] = (
-                all_vectors[offset:offset + size]
-                + all_vectors[pair_count + offset:pair_count + offset + size]
-            )
+            encoded[index] = np.concatenate((
+                all_vectors[offset:offset + size],
+                all_vectors[pair_count + offset:pair_count + offset + size],
+            ), axis=0)
             offset += size
         gap_penalties = sorted({float(x) for x in args.gap_penalties.split(",")})
         merge_penalties = sorted({float(x) for x in args.merge_penalties.split(",")})
-        if any(x < 0 for x in gap_penalties + merge_penalties):
-            raise ValueError("DP 惩罚参数不能为负数。")
+        if any(not math.isfinite(x) or x < 0 for x in gap_penalties + merge_penalties):
+            raise ValueError("DP 惩罚参数必须是非负有限数。")
         # Cache vectorized cosine transition scores once; the parameter grid
         # then performs only lightweight dynamic-programming table lookups.
         similarity_cache = {
@@ -246,10 +251,10 @@ def main() -> None:
     for index, block in enumerate(blocks):
         size = len(block)
         if index in test_ids:
-            block_vectors = (
-                selected_vectors[offset_for_cache:offset_for_cache + size]
-                + selected_vectors[pair_count + offset_for_cache:pair_count + offset_for_cache + size]
-            )
+            block_vectors = np.concatenate((
+                selected_vectors[offset_for_cache:offset_for_cache + size],
+                selected_vectors[pair_count + offset_for_cache:pair_count + offset_for_cache + size],
+            ), axis=0)
             selected_similarity_cache[index] = build_similarity_tables(block_vectors, size)
         offset_for_cache += size
     heldout_rows = []
@@ -257,10 +262,10 @@ def main() -> None:
     for index, block in enumerate(blocks):
         size = len(block)
         if index in test_ids:
-            block_vectors = (
-                selected_vectors[offset:offset + size]
-                + selected_vectors[pair_count + offset:pair_count + offset + size]
-            )
+            block_vectors = np.concatenate((
+                selected_vectors[offset:offset + size],
+                selected_vectors[pair_count + offset:pair_count + offset + size],
+            ), axis=0)
             heldout_rows.append(
                 evaluate_block(block, block_vectors, selected_threshold,
                                selected_gap_penalty, selected_merge_penalty,
@@ -295,7 +300,16 @@ def main() -> None:
         "corpus_sentence_pairs": len(pairs),
         "block_size": args.block_size,
         "candidate_models": model_names,
-        "split": {"seed": args.seed, "dev_blocks": len(dev_ids), "test_blocks": len(test_ids)},
+        "split": {
+            "strategy": "contiguous_prefix_calibration_suffix_heldout",
+            "dev_blocks": len(dev_ids),
+            "test_blocks": len(test_ids),
+            "document_independence": (
+                "The source dataset does not expose stable movie/document IDs; "
+                "contiguous holdout reduces adjacent-block leakage but cannot prove "
+                "document-level independence."
+            ),
+        },
         "model_calibrations": model_calibrations,
         "selected_model": selected_model,
         "selected_threshold": selected_threshold,
@@ -310,7 +324,10 @@ def main() -> None:
             "are split before model/threshold selection. Model and threshold are selected "
             "using calibration blocks only; held-out blocks are evaluated once. Exact 1:1 "
             "links count as correct; wrong links, 1:n/n:1 groups, and unmatched sentences "
-            "are separately reported. This benchmark measures sentence alignment, not "
+            "are separately reported. Exact-match accuracy is exact links divided by gold pairs. "
+            "The source does not expose stable document IDs, so the contiguous held-out tail "
+            "is separated from calibration but cannot guarantee movie-level independence. "
+            "This benchmark measures sentence alignment, not "
             "word/phrase translation correctness."
         ),
     }
@@ -320,7 +337,7 @@ def main() -> None:
         "selected_threshold": selected_threshold,
         "selected_gap_penalty": selected_gap_penalty,
         "selected_merge_penalty": selected_merge_penalty,
-        "calibration": {k: selected["best_on_dev"][k] for k in ("precision", "recall", "f1", "errors")},
+        "calibration": {k: selected["best_on_dev"][k] for k in ("exact_match_accuracy", "precision", "recall", "f1", "errors")},
         "heldout_baseline": report["heldout_baseline_default_parameters"],
         "heldout_test": report["heldout_test"],
         "heldout_improvement": report["heldout_improvement_over_baseline"],

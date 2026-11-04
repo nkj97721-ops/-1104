@@ -6,15 +6,26 @@ unmatched sentences on either side. Embeddings are supplied by the caller.
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from typing import Any, Sequence
 
-SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s*")
+SENTENCE_END = re.compile(r"(?<=[!?。！？])\s*|(?<=\.)\s+")
+ABBREVIATIONS = re.compile(
+    r"\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|U\.S|U\.K)\.",
+    re.IGNORECASE,
+)
 
 
 def split_sentences(text: str) -> list[str]:
     """Split English/Chinese text while preserving terminal punctuation."""
-    return [part.strip() for part in SENTENCE_END.split(text.strip()) if part.strip()]
-
+    protected = ABBREVIATIONS.sub(
+        lambda match: match.group().replace(".", "\uE000"), text.strip()
+    )
+    protected = re.sub(r"(?<=\d)\.(?=\d)", "\uE000", protected)
+    return [
+        part.replace("\uE000", ".").strip()
+        for part in SENTENCE_END.split(protected)
+        if part.strip()
+    ]
 
 def align_sentence_embeddings(
     source_vectors: Sequence[Sequence[float]],
@@ -44,7 +55,32 @@ def align_sentence_embeddings(
         width = len(vectors[0])
         return [sum(float(v[k]) for v in vectors) / len(vectors) for k in range(width)]
 
+    if not math.isfinite(threshold) or threshold < -1.0 or threshold > 1.0:
+        raise ValueError("threshold must be within [-1, 1]")
+    if not math.isfinite(gap_penalty) or gap_penalty < 0:
+        raise ValueError("gap_penalty must be finite and non-negative")
+    if not math.isfinite(merge_penalty) or merge_penalty < 0:
+        raise ValueError("merge_penalty must be finite and non-negative")
+
     n, m = len(source_vectors), len(target_vectors)
+    vectors = list(source_vectors) + list(target_vectors)
+    dimensions = {len(vector) for vector in vectors}
+    if len(dimensions) > 1 or (dimensions and 0 in dimensions):
+        raise ValueError("All sentence vectors must have the same non-zero dimension")
+    if any(not math.isfinite(float(value)) for vector in vectors for value in vector):
+        raise ValueError("Sentence vectors must contain only finite values")
+
+    if similarity_tables is not None:
+        if len(similarity_tables) != 3:
+            raise ValueError("Exactly three similarity tables are required")
+        expected_shapes = ((n, m), (n, max(0, m - 1)), (max(0, n - 1), m))
+        for table, expected in zip(similarity_tables, expected_shapes):
+            shape = getattr(table, "shape", None)
+            if shape is None:
+                shape = (len(table), len(table[0]) if len(table) else 0)
+            if tuple(shape) != expected:
+                raise ValueError(f"Similarity table shape {tuple(shape)} does not match {expected}")
+
     neg_inf = float("-inf")
     dp = [[neg_inf] * (m + 1) for _ in range(n + 1)]
     back = [[None] * (m + 1) for _ in range(n + 1)]
@@ -125,7 +161,7 @@ def encode_sentences(
     model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     no_cuda: bool = False,
     batch_size: int = 16,
-) -> list[list[float]]:
+) -> Any:
     """Create local multilingual sentence embeddings trained for semantic similarity."""
     import torch
     from sentence_transformers import SentenceTransformer
@@ -139,4 +175,4 @@ def encode_sentences(
         convert_to_numpy=True,
         normalize_embeddings=True,
     )
-    return vectors.tolist()
+    return vectors
