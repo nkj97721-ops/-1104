@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: real-corpus-alignment-${{ github.ref }}
+  group: real-corpus-alignment-v2-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
