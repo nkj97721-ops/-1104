@@ -1,18 +1,8 @@
 name: Parallel corpus benchmark
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "tools/**"
-      - "tests/**"
-      - ".github/workflows/parallel-benchmark.yml"
-  push:
-    branches: [main]
-    paths:
-      - "tools/**"
-      - "tests/**"
-      - ".github/workflows/parallel-benchmark.yml"
+  # Legacy 1:1 row-pair benchmark. Run manually only; V5 real-corpus workflow
+  # is the active automatic benchmark.
   workflow_dispatch:
 
 permissions:
