@@ -65,7 +65,7 @@ jobs:
             --output reports/opensubtitles2024-silver-comparison.json \
             --thresholds 0.20,0.25,0.30,0.35,0.40 \
             --gap-penalties 0.04,0.08,0.12,0.16 \
-            --merge-penalties 0.00,0.02,0.06,0.10 \
+            --merge-penalties 0.00,0.02,0.04,0.06,0.10,0.14,0.18,0.22 \
             --max-documents-per-split 40 \
             --no-cuda
       - name: Run dual-model automatic silver benchmark on WMT
