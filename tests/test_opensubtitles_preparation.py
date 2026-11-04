@@ -36,6 +36,10 @@ class OpenSubtitlesPreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "line counts"):
             split_aligned_lines(["one", "two"], ["一"])
 
+    def test_human_group_validator_rejects_empty_manual_resegmentation(self):
+        with self.assertRaisesRegex(ValueError, "non-empty sentence strings"):
+            validate_groups([""], ["甲"], [])
+
     def test_human_group_validator_accepts_2_to_2_and_rejects_reuse(self):
         validate_groups(
             ["A", "B"],
