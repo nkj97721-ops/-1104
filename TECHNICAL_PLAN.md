@@ -54,7 +54,7 @@ python build_font.py --input samples/pairs.json --output dist/My-TwinLine.ttf --
 
 ## 整段自动语义对齐（第二阶段）
 
-新增 `tools/sentence_align.py` 与 `tools/align_document.py`。句子切分后，使用 multilingual BERT mean-pooling 句向量计算余弦相似度，并通过单调动态规划完成全局配对。状态转移支持 1:1、1:2、2:1 和两侧独立跳过；因此可处理句子数量不一致、部分句子合并/拆分及未匹配句子。当前保留文本原始顺序，不处理任意重排序。
+新增 `tools/sentence_align.py` 与 `tools/align_document.py`。句子切分后，使用专门训练用于语义相似度的 multilingual Sentence-Transformers 句向量计算余弦相似度，并通过单调动态规划完成全局配对。状态转移支持 1:1、1:2、2:1 和两侧独立跳过；因此可处理句子数量不一致、部分句子合并/拆分及未匹配句子。当前保留文本原始顺序，不处理任意重排序。
 
 已匹配句组通过批量 AWESOME-align 推理完成词级对齐，避免每组句子重新加载一次词级模型。最终 JSON 聚合全局 token/span 索引、句组匹配结果、未匹配句子、词级链接和短语候选，继续兼容排版器的候选导入。
 
