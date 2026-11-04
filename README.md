@@ -109,27 +109,31 @@ python tools/align_document.py \
 
 ## 英文—简体中文真实语料准确率基准（V4）
 
-基准语料改为 **WMT News Commentary v16**。它是新闻评论领域的英文—中文平行语料，官方以单个 gzip TSV 文件分发；每一行自身包含一条英文句子和对应中文句子，中间用 Tab 分隔。下载器直接流式解压同一文件，不再把两个独立文本文件按行号拼接，也不依赖 PyArrow。
+校准语料使用 **WMT News Commentary v16** 的英文—中文平行数据。官方以单个 gzip TSV 文件分发；每一行自身包含英文和对应中文，中间用 Tab 分隔。下载器直接流式解压同一文件，不再把两个独立文本文件按行号拼接，也不依赖 PyArrow。
 
-官方语料地址：
+校准语料地址：
 
 \`https://data.statmt.org/news-commentary/v16/training/news-commentary-v16.en-zh.tsv.gz\`
 
-输出仅保留英文源句与简体中文目标句：使用 OpenCC 检测并排除会发生繁转简变化的目标句，再排除含常见书面粤语标记的句子。粤语规则是启发式过滤，不是完整的方言分类器；简体字形也不等于绝对普通话。
+独立测试集使用 **WMT17 EN→ZH 官方测试集的改进参考版本**。下载器从官方归档中读取英文 source 和中文 reference 的 SGML 文件，并按 \`(docid, segment id)\` 连接句子；两侧 ID 集合不一致就直接失败，绝不按行号强行配对。WMT17 任务说明指出该测试集由专业翻译人员制作。详见 [WMT17 官方任务说明](https://www.statmt.org/wmt17/translation-task.html)。
+
+输出只保留英文源句与简体中文目标句：使用 OpenCC 检测并排除会发生繁转简变化的目标句，再排除含常见书面粤语标记的句子。粤语规则是启发式过滤，不是完整的方言分类器；简体字形也不等于绝对普通话。
 
 \`\`\`bash
 python -m pip install opencc-python-reimplemented
 python tools/download_parallel_corpus.py --output data/news-commentary-en-zh.tsv --limit 10000
+python tools/download_wmt17_test.py --output data/wmt17-en-zh-test.tsv
 python tools/benchmark_parallel.py \\
   --input data/news-commentary-en-zh.tsv \\
+  --test-input data/wmt17-en-zh-test.tsv \\
   --models sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE \\
   --block-size 20 \\
   --output reports/news-commentary-en-zh-benchmark.json
 \`\`\`
 
-\`--limit 10000\` 限制写出的有效配对数量，但下载器仍会读完整个 gzip 文件并统计所有过滤数量，以便验证压缩流完整性。下载器会生成同名 \`.manifest.json\`，记录扫描数、有效数、写入数及各类过滤数。
+\`--limit 10000\` 限制写出的校准句对数量，但下载器仍会读完整个 gzip 文件并统计所有过滤数量，以便验证压缩流完整性。两个下载器都会生成同名 \`.manifest.json\`，记录扫描数、有效数、写入数及过滤数。
 
-基准比较 MiniLM 与 LaBSE 两个句向量模型，只在校准集上扫描相似度阈值和 DP gap/merge 惩罚参数，再在保留的连续测试块上报告 exact-match accuracy、precision、recall、F1 和错配案例。这个留出集来自同一训练语料文件，不是 WMT 官方 test split；源文件没有稳定的文档 ID，因此不能声称文档级完全独立。结果只代表 News Commentary v16 语料上的句子对齐表现，不代表翻译质量或所有领域的普遍准确率。
+基准比较 MiniLM 与 LaBSE 两个句向量模型，只在 News Commentary 校准集上扫描相似度阈值和 DP gap/merge 惩罚参数，再在独立 WMT17 测试集上评估一次。测试前会剔除与校准集完全重复的英文句或中文句。报告包含 exact-match accuracy、precision、recall、F1、错配案例、所选模型及最优参数。它衡量的是这两个 WMT 语料上的句子对齐表现，不代表翻译质量或所有领域的普遍准确率。
 
 运行基础回归测试：
 
