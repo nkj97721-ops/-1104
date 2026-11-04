@@ -182,7 +182,8 @@ def main() -> None:
         raise ValueError("至少指定一个句向量模型。")
     all_texts = [x[0] for x in pairs] + [x[1] for x in pairs]
     model_calibrations = []
-    model_vectors: dict[str, list[list[float]]] = {}
+    import numpy as np
+    model_vectors: dict[str, Any] = {}
     for model_name in model_names:
         # One model load/encoding pass per candidate model.
         all_vectors = encode_sentences(all_texts, model_name, args.no_cuda)
@@ -192,10 +193,10 @@ def main() -> None:
         offset = 0
         for index, block in enumerate(blocks):
             size = len(block)
-            encoded[index] = (
-                all_vectors[offset:offset + size]
-                + all_vectors[pair_count + offset:pair_count + offset + size]
-            )
+            encoded[index] = np.concatenate((
+                all_vectors[offset:offset + size],
+                all_vectors[pair_count + offset:pair_count + offset + size],
+            ), axis=0)
             offset += size
         gap_penalties = sorted({float(x) for x in args.gap_penalties.split(",")})
         merge_penalties = sorted({float(x) for x in args.merge_penalties.split(",")})
@@ -246,10 +247,10 @@ def main() -> None:
     for index, block in enumerate(blocks):
         size = len(block)
         if index in test_ids:
-            block_vectors = (
-                selected_vectors[offset_for_cache:offset_for_cache + size]
-                + selected_vectors[pair_count + offset_for_cache:pair_count + offset_for_cache + size]
-            )
+            block_vectors = np.concatenate((
+                selected_vectors[offset_for_cache:offset_for_cache + size],
+                selected_vectors[pair_count + offset_for_cache:pair_count + offset_for_cache + size],
+            ), axis=0)
             selected_similarity_cache[index] = build_similarity_tables(block_vectors, size)
         offset_for_cache += size
     heldout_rows = []
@@ -257,10 +258,10 @@ def main() -> None:
     for index, block in enumerate(blocks):
         size = len(block)
         if index in test_ids:
-            block_vectors = (
-                selected_vectors[offset:offset + size]
-                + selected_vectors[pair_count + offset:pair_count + offset + size]
-            )
+            block_vectors = np.concatenate((
+                selected_vectors[offset:offset + size],
+                selected_vectors[pair_count + offset:pair_count + offset + size],
+            ), axis=0)
             heldout_rows.append(
                 evaluate_block(block, block_vectors, selected_threshold,
                                selected_gap_penalty, selected_merge_penalty,
