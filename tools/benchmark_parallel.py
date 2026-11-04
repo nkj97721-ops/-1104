@@ -326,6 +326,43 @@ def main() -> None:
                                selected_similarity_cache[index])
             )
         offset += size
+    # Evaluate every candidate model on the independent test set using only
+    # parameters selected on calibration data. This prevents a single selected
+    # model from hiding the held-out performance of the other candidate.
+    heldout_model_comparisons = []
+    for model_calibration in model_calibrations:
+        model_name = model_calibration["model"]
+        best = model_calibration["best_on_dev"]
+        model_rows = []
+        if model_name == selected_model:
+            model_rows = heldout_rows
+        else:
+            model_vectors_for_test = model_vectors[model_name]
+            offset = 0
+            for index, block in enumerate(blocks):
+                size = len(block)
+                if index in test_ids:
+                    block_vectors = np.concatenate((
+                        model_vectors_for_test[offset:offset + size],
+                        model_vectors_for_test[pair_count + offset:pair_count + offset + size],
+                    ), axis=0)
+                    tables = build_similarity_tables(block_vectors, size)
+                    model_rows.append(evaluate_block(
+                        block, block_vectors, best["threshold"],
+                        best["gap_penalty"], best["merge_penalty"], tables,
+                    ))
+                offset += size
+        heldout_model_comparisons.append({
+            "model": model_name,
+            "parameters_selected_on_calibration": {
+                "threshold": best["threshold"],
+                "gap_penalty": best["gap_penalty"],
+                "merge_penalty": best["merge_penalty"],
+            },
+            **aggregate(model_rows),
+            "block_details": model_rows,
+        })
+
     # Baseline: selected model with the pre-calibration default DP settings.
     baseline_rows = []
     offset = 0
@@ -365,7 +402,14 @@ def main() -> None:
         "selected_merge_penalty": selected_merge_penalty,
         "heldout_baseline_default_parameters": baseline_summary,
         "heldout_test": tuned_summary,
+        "heldout_model_comparisons": heldout_model_comparisons,
         "heldout_improvement_over_baseline": improvement,
+        "gold_alignment_assumption": (
+            "Each TSV row is treated as one gold 1:1 pair. This assumption must be "
+            "checked for segment-boundary splits, merges, or source/reference defects; "
+            "reported mismatch examples are candidates for human review, not automatic "
+            "proof that the model is wrong."
+        ),
         "heldout_block_details": heldout_rows,
         "methodology": (
             "Gold alignment is the original parallel-corpus row pairing. Model and DP "
@@ -386,6 +430,11 @@ def main() -> None:
         "calibration": {k: selected["best_on_dev"][k] for k in ("exact_match_accuracy", "precision", "recall", "f1", "errors")},
         "heldout_baseline": report["heldout_baseline_default_parameters"],
         "heldout_test": report["heldout_test"],
+        "heldout_model_comparisons": [
+            {k: item[k] for k in ("model", "parameters_selected_on_calibration",
+                                  "exact_match_accuracy", "precision", "recall", "f1", "errors")}
+            for item in heldout_model_comparisons
+        ],
         "heldout_improvement": report["heldout_improvement_over_baseline"],
         "output": args.output,
     }, ensure_ascii=False, indent=2))
