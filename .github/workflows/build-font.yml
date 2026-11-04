@@ -1,5 +1,17 @@
 name: Build TwinLine V2 font
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'build_font.py'
+      - 'font_studio.py'
+      - 'samples/**'
+      - 'tests/**'
+      - 'specimen/**'
+      - 'tools/semantic_align.py'
+      - 'tools/sentence_align.py'
+      - 'tools/align_document.py'
+      - '.github/workflows/build-font.yml'
   push:
     paths:
       - 'build_font.py'
