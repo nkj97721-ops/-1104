@@ -7,7 +7,9 @@ on:
       - 'samples/**'
       - 'tests/**'
       - 'specimen/**'
-      - 'tools/semantic_align.py'\n      - 'tools/sentence_align.py'\n      - 'tools/align_document.py'
+      - 'tools/semantic_align.py'
+      - 'tools/sentence_align.py'
+      - 'tools/align_document.py'
       - 'tools/requirements-semantic-align.txt'
       - '.github/workflows/build-font.yml'
   workflow_dispatch:
