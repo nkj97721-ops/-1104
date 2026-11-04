@@ -38,7 +38,7 @@ button:active{background:#292929}
 <body>
 <main>
 <h1>TwinLine V2 · 双层中英排版器</h1>
-<div class="note">直接粘贴普通英文和中文。排版器会测量两种字体的实际宽度，先按句子建立中英对应关系，再进行字体测量和视觉断行。句子模式按输入顺序一一配对，请确保两种语言的句子顺序一致；数量不一致时停止排版，不会擅自补齐或错配。不需要手动输入 PUA 私用区字符。</div>
+<div class="note">直接粘贴普通英文和中文。排版器会测量两种字体的实际宽度，先按句子建立中英对应关系，再进行字体测量和视觉断行。句子模式按输入顺序一一配对，请确保两种语言的句子顺序一致；短语模式每行写一组句子，用 | 分隔一一对应的短语，英文和中文的行数及每行短语数必须一致。数量不一致时停止排版，不会擅自补齐或错配。不需要手动输入 PUA 私用区字符。</div>
 <div class="editors">
 <label>英文
 <textarea id="english" spellcheck="false">The quick brown fox jumps over the lazy dog.
@@ -52,7 +52,7 @@ One thought, two languages, one visual unit.</textarea>
 </label>
 </div>
 <div class="controls">
-<label class="control"><span>配对方式</span><select id="mode"><option value="lines">逐行配对（手动指定对应关系）</option><option value="sentences">按句子配对</option><option value="paragraphs">按段落配对（段内再按句子）</option></select></label>
+<label class="control"><span>配对方式</span><select id="mode"><option value="lines">逐行配对（手动指定对应关系）</option><option value="phrases">逐短语配对（用 | 分隔对应短语）</option><option value="sentences">按句子配对</option><option value="paragraphs">按段落配对（段内再按句子）</option></select></label>
 <label class="control"><span>英文大小：<b id="enValue">25 px</b></span><input id="enSize" type="range" min="12" max="44" value="25"></label>
 <label class="control"><span>中文大小：<b id="zhValue">20 px</b></span><input id="zhSize" type="range" min="12" max="40" value="20"></label>
 <label class="control"><span>两层间距：<b id="gapValue">2 px</b></span><input id="gapSize" type="range" min="0" max="16" value="2"></label>
@@ -65,7 +65,7 @@ One thought, two languages, one visual unit.</textarea>
 </div>
 <div class="status" id="status" role="status" aria-live="polite"></div>
 <section class="preview" id="preview" aria-label="双层中英排版预览"></section>
-<div class="footer">对应关系规则：逐行模式由用户明确配对；句子模式按顺序配对（用户需保证顺序一致）；段落模式先配对段落，再校验段内句子数量。句子数量不一致时停止导出。长句内部优先在逗号、分号、冒号等分句标点处断行，其次在词边界处断行；这改善短语边界，但不替代人工语义校对。排版器不会自动翻译英文。独立 TTF 仍然是固定字形集合，普通 TTF 规范没有机制让字体自行读取任意两段文字并建立翻译关系。</div>
+<div class="footer">对应关系规则：逐行模式由用户明确配对；短语模式用竖线 | 显式划分短语边界，英文与中文按同一行、同一序号配对，每组短语独立排版；句子模式按顺序配对（用户需保证顺序一致）；段落模式先配对段落，再校验段内句子数量。句子数量不一致时停止导出。短语模式示例：英文输入 `take | a closer look | at the issue`，中文对应输入 `仔细 | 看一看 | 这个问题`；三个位置分别构成独立配对单元。长句内部优先在逗号、分号、冒号等分句标点处断行，其次在词边界处断行；这改善短语边界，但不替代人工语义校对。排版器不会自动翻译英文。独立 TTF 仍然是固定字形集合，普通 TTF 规范没有机制让字体自行读取任意两段文字并建立翻译关系。</div>
 </main>
 <script src="renderer.js"></script>
 <script>
@@ -84,7 +84,7 @@ function update(){
  if(!lastData.valid){
   $("status").textContent="已暂停输出："+lastData.errors.join(" ");
  }else{
-  $("status").textContent="对应关系检查通过："+lastData.pairs.length+" 组句子配对，视觉排版 "+lastData.rows+" 行。";
+  $("status").textContent="对应关系检查通过："+lastData.pairs.length+" 组配对单元，视觉排版 "+lastData.rows+" 行。";
  }
  return lastData;
 }
