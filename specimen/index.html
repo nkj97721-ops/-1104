@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>双层中英字体 V2 · 排版验证</title>
+<style>
+:root { color-scheme: dark; --bg:#050505; --fg:#f3f3f3; --muted:#aaa; }
+* { box-sizing:border-box; }
+body { margin:0; padding:28px 20px 48px; background:var(--bg); color:var(--fg);
+  font-family:Arial,"Noto Sans SC",sans-serif; }
+main { max-width:760px; margin:auto; }
+h1 { margin:0 0 8px; font-size:22px; font-weight:600; letter-spacing:.02em; }
+.note { color:var(--muted); font-size:13px; line-height:1.6; margin-bottom:28px; }
+.pair { display:grid; gap:2px; padding:14px 0 16px; border-bottom:1px solid #252525; }
+.en { font-size:25px; line-height:1.04; letter-spacing:.005em; font-weight:500; }
+.zh { font-size:20px; line-height:1.05; letter-spacing:.015em; font-weight:400; }
+.controls { display:flex; gap:12px; flex-wrap:wrap; margin:20px 0 24px; color:var(--muted); font-size:13px; }
+label { display:flex; gap:8px; align-items:center; }
+input { accent-color:white; }
+@media (max-width:480px) { body { padding:22px 16px 36px; } .en{font-size:22px;} .zh{font-size:18px;} }
+</style>
+</head>
+<body>
+<main>
+<h1>双层中英字体 V2</h1>
+<div class="note">英文在上，中文在下。每组两行作为一个整体；此页面用于验证比例与行距，尚非最终字体文件。</div>
+<div class="controls">
+<label>整体字号 <input id="scale" type="range" min="16" max="36" value="25"></label>
+<label>层间距 <input id="gap" type="range" min="0" max="10" value="2"></label>
+</div>
+<section id="specimen">
+<div class="pair"><div class="en">The quick brown fox jumps over the lazy dog.</div><div class="zh">敏捷的棕色狐狸跳过了那只懒狗。</div></div>
+<div class="pair"><div class="en">Typography is the art of arranging type.</div><div class="zh">字体排印是安排文字的艺术。</div></div>
+<div class="pair"><div class="en">One thought, two languages, one visual unit.</div><div class="zh">一种思想，两种语言，一个视觉整体。</div></div>
+<div class="pair"><div class="en">Precision comes from proportion and spacing.</div><div class="zh">精确感来自比例与间距。</div></div>
+</section>
+</main>
+<script>
+const scale=document.querySelector('#scale'), gap=document.querySelector('#gap');
+function update(){
+ document.querySelectorAll('.en').forEach(x=>x.style.fontSize=scale.value+'px');
+ document.querySelectorAll('.zh').forEach(x=>x.style.fontSize=(scale.value*.8)+'px');
+ document.querySelectorAll('.pair').forEach(x=>x.style.gap=gap.value+'px');
+}
+scale.addEventListener('input',update); gap.addEventListener('input',update); update();
+</script>
+</body>
+</html>
