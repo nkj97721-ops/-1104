@@ -1,6 +1,12 @@
 name: Parallel corpus benchmark
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/**"
+      - "tests/**"
+      - ".github/workflows/parallel-benchmark.yml"
   push:
     branches: [main]
     paths:
@@ -43,6 +49,7 @@ jobs:
 
       - name: Run alignment regression tests
         run: python -m unittest discover -s tests -p 'test_sentence*.py' -v
+          python -m unittest discover -s tests -p 'test_download_parallel_corpus.py' -v
 
       - name: Download OPUS OpenSubtitles English–Simplified-Chinese corpus
         run: |
@@ -69,6 +76,7 @@ jobs:
           name: opensubtitles-zh-cn-parallel-benchmark
           path: |
             reports/
-            data/opensubtitles-en-zh-cn.tsv\n            data/opensubtitles-en-zh-cn.tsv.manifest.json
+            data/opensubtitles-en-zh-cn.tsv
+            data/opensubtitles-en-zh-cn.tsv.manifest.json
           if-no-files-found: warn
           retention-days: 30
