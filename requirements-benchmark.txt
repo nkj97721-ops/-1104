@@ -1,5 +1,4 @@
 sentence-transformers>=3.0,<6
-torch
 numpy
 fonttools>=4.0
 opencc-python-reimplemented
