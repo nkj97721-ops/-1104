@@ -69,13 +69,13 @@ class CorpusFilteringTests(unittest.TestCase):
 
     def test_blank_physical_line_is_ignored(self):
         self.assertEqual(
-            CORPUS.parse_parallel_line("\\n"),
+            CORPUS.parse_parallel_line("\n"),
             {"source": "", "target": ""},
         )
 
     def test_empty_language_column_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "field is empty"):
-            CORPUS.parse_parallel_line("English only\\t")
+            CORPUS.parse_parallel_line("English only\t")
 
 
 if __name__ == "__main__":
