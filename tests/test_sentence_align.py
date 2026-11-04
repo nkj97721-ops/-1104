@@ -20,6 +20,18 @@ class SentenceAlignmentTests(unittest.TestCase):
             ["Dr. Smith paid 3.14 dollars.", "Next sentence."],
         )
 
+    def test_closing_chinese_quote_stays_with_sentence(self):
+        self.assertEqual(
+            ALIGN.split_sentences('他说：“我们会继续努力。”下一句开始。'),
+            ['他说：“我们会继续努力。”', '下一句开始。'],
+        )
+
+    def test_closing_ascii_quote_stays_with_english_sentence(self):
+        self.assertEqual(
+            ALIGN.split_sentences('He said, "We are ready." Then he left.'),
+            ['He said, "We are ready."', 'Then he left.'],
+        )
+
     def test_aligns_monotonic_one_to_one_pairs(self):
         result = ALIGN.align_sentence_embeddings([[1, 0], [0, 1]],
                                                   [[0.99, 0.01], [0.02, 0.98]],
