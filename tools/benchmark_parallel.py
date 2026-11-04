@@ -273,7 +273,7 @@ def main() -> None:
             )
             baseline_rows.append(
                 evaluate_block(block, block_vectors, 0.35, 0.12, 0.06,
-                               similarity_cache.get(index) or build_similarity_tables(block_vectors, size))
+                               selected_similarity_cache[index])
             )
         offset += size
     baseline_summary = aggregate(baseline_rows)
