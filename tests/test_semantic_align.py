@@ -22,6 +22,11 @@ class SemanticAlignmentTests(unittest.TestCase):
         self.assertEqual("".join(tokens), "我喜欢自然语言处理。")
         self.assertIn("。", tokens)
 
+    def test_parses_awesomes_align_tensor_probability_output(self):
+        links = ALIGN.parse_links("0-1 1-0", "tensor(0.83, device='cuda:0') 0.72", 2, 2)
+        self.assertAlmostEqual(links[0]["probability"], 0.83)
+        self.assertAlmostEqual(links[1]["probability"], 0.72)
+
     def test_extracts_consistent_phrase_candidates(self):
         source = ["take", "a", "closer", "look"]
         target = ["仔细", "看一看"]
