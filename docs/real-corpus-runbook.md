@@ -100,3 +100,21 @@ The repository stores scripts and schemas only. Keep downloaded subtitle text,
 review queues, and human annotations in local or access-controlled storage.
 Retain upstream attribution and check the source dataset terms before any
 redistribution or commercial use.
+
+## Additional news-domain corpus
+
+For a second domain with professionally translated news references, the
+repository also prepares a WMT review queue:
+
+```bash
+python tools/prepare_wmt_gold_queue.py \
+  --output-dir data/wmt-human-review \
+  --calibration-documents 20 \
+  --max-segments-per-document 40
+```
+
+News Commentary v16 supplies calibration blocks; WMT17 supplies held-out test
+documents. The WMT17 source and reference are joined by their original
+`(docid, segment id)` keys. Each segment is then independently sentence-split
+on both sides. The original segment pairing remains only a silver proposal
+until a reviewer confirms or corrects it.
