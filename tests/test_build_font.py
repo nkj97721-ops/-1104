@@ -63,6 +63,21 @@ class ValidatePairsTests(unittest.TestCase):
         self.assertEqual("".join(row["zh"] for row in rows), zh)
         self.assertTrue(all(row["source_pair"] == 1 for row in rows))
 
+    def test_expansion_balances_line_counts_for_both_languages(self):
+        en = "abcdefghijkl"
+        zh = "中文测试文字"
+        en_cmap = {ord(c): c for c in en}
+        zh_cmap = {ord(c): c for c in zh}
+        en_metrics = {c: (1000, 0) for c in set(en_cmap.values())}
+        zh_metrics = {c: (1000, 0) for c in set(zh_cmap.values())}
+        rows = expand_pairs([{"en": en, "zh": zh}], en_cmap, en_metrics,
+                            zh_cmap, zh_metrics, 1000)
+        self.assertEqual(len(rows), 6)
+        self.assertEqual("".join(row["en"] for row in rows), en)
+        self.assertEqual("".join(row["zh"] for row in rows), zh)
+        self.assertTrue(all(row["segment"] == i + 1 for i, row in enumerate(rows)))
+        self.assertTrue(all(row["segments"] == len(rows) for row in rows))
+
     def test_private_use_range_has_expected_capacity(self):
         self.assertEqual(PUA_START, 0xE000)
         self.assertEqual(MAX_PAIRS, 6400)
