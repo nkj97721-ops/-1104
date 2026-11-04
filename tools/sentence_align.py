@@ -61,13 +61,10 @@ def build_similarity_tables(source_vectors, target_vectors):
     target_pairs = target_pairs / np.maximum(
         np.linalg.norm(target_pairs, axis=1, keepdims=True), 1e-12
     )
-    pooled_two_two = source_pairs @ target_pairs.T
-    diagonal_two_two = 0.5 * (
-        source[:-1] @ target[:-1].T + source[1:] @ target[1:].T
-    )
-    # Blend holistic group meaning with order-preserving sentence-pair evidence.
-    # This reduces 2:2 false merges caused by broad topical similarity alone.
-    two_two = 0.7 * pooled_two_two + 0.3 * diagonal_two_two
+    # A 2:2 transition represents the joint meaning of both adjacent sentences.
+    # Keep the original pooled score: the order-aware blend reduced held-out
+    # 2:2 recall on both models in the latest real-corpus comparison.
+    two_two = source_pairs @ target_pairs.T
     return tuple(np.clip(table, -1.0, 1.0) for table in (
         source @ target.T,
         source @ target_pairs.T,
@@ -86,9 +83,8 @@ def align_sentence_embeddings(
 ) -> dict:
     """Globally align sentence vectors with monotonic 1:1, 1:2, 2:1 and 2:2 transitions.
 
-    Merge transitions use pooled semantic similarity. The 2:2 score also
-    includes order-preserving sentence-pair evidence to suppress broad topical
-    false merges. Rewards are scaled by the mean number of consumed sentences.
+    Merge transitions use pooled semantic similarity. Rewards are scaled by
+    the mean number of consumed sentences.
     """
     import math
 
@@ -177,13 +173,7 @@ def align_sentence_embeddings(
                 score = (
                     float(similarity_tables[3][i][j])
                     if similarity_tables is not None and len(similarity_tables) == 4
-                    else (
-                        0.7 * cosine(mean(source_vectors[i:i + 2]), mean(target_vectors[j:j + 2]))
-                        + 0.3 * 0.5 * (
-                            cosine(source_vectors[i], target_vectors[j])
-                            + cosine(source_vectors[i + 1], target_vectors[j + 1])
-                        )
-                    )
+                    else cosine(mean(source_vectors[i:i + 2]), mean(target_vectors[j:j + 2]))
                 )
                 transitions.append((2, 2, score, 2.0 * merge_penalty))
 
