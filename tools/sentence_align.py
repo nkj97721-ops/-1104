@@ -8,19 +8,24 @@ from __future__ import annotations
 import re
 from typing import Any, Sequence
 
-SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s*")
+SENTENCE_END = re.compile(r"(?<=[!?。！？])\s*|(?<=\.)\s+")
+ABBREVIATIONS = re.compile(
+    r"\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|U\.S|U\.K)\.",
+    re.IGNORECASE,
+)
 
 
 def split_sentences(text: str) -> list[str]:
     """Split English/Chinese text while preserving terminal punctuation."""
-    protected = ABBREVIATIONS.sub(lambda match: match.group().replace(".", "\\uE000"), text.strip())
-    protected = re.sub(r"(?<=\\d)\\.(?=\\d)", "\\uE000", protected)
+    protected = ABBREVIATIONS.sub(
+        lambda match: match.group().replace(".", "\uE000"), text.strip()
+    )
+    protected = re.sub(r"(?<=\d)\.(?=\d)", "\uE000", protected)
     return [
-        part.replace("\\uE000", ".").strip()
+        part.replace("\uE000", ".").strip()
         for part in SENTENCE_END.split(protected)
         if part.strip()
     ]
-
 
 def align_sentence_embeddings(
     source_vectors: Sequence[Sequence[float]],
