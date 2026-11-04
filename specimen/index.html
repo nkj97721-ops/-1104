@@ -166,12 +166,7 @@ $("alignmentFile").addEventListener("change",async event=>{
 });
 $("applyAlignment").addEventListener("click",()=>{
  const selected=Array.from($("alignmentCandidates").querySelectorAll("input:checked"))
-  .map(input=>$("alignmentCandidates").children[Number(input.value)])
-  .filter(Boolean)
-  .map(label=>{
-   const index=Array.from($("alignmentCandidates").children).indexOf(label);
-   return window.__twinlineAlignmentCandidates[index];
-  }).filter(Boolean);
+  .map(input=>alignmentCandidates[Number(input.value)]).filter(Boolean);
  if(!selected.length){$("status").textContent="先勾选至少一组候选。";return;}
  const ordered=selected.slice().sort((a,b)=>a.source_span[0]-b.source_span[0]);
  for(let i=1;i<ordered.length;i++){
