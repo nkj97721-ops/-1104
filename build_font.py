@@ -38,7 +38,7 @@ def split_text_to_width(text, cmap, metrics, scale, max_width):
     """Greedy wrap that prefers whitespace and falls back to character boundaries."""
     if not text:
         return [""]
-    tokens = re.findall(r"\\S+\\s*|\\s+", text)
+    tokens = re.findall(r"\S+\s*|\s+", text)
     lines, current = [], ""
     for token in tokens:
         pieces = [token]
