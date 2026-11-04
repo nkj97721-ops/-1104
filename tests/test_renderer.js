@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const {
-  wrapText, wrapPair, paragraphBlocks, lineBlocks,
+  wrapText, wrapPair, splitOneLine, paragraphBlocks, lineBlocks,
   splitSentences, preparePairs
 } = require("../specimen/renderer.js");
 
@@ -13,6 +13,13 @@ assert.equal(rows.map(row => row.en).join("").replace(/\s/g, ""), en.replace(/\s
 assert.equal(rows.map(row => row.zh).join(""), zh);
 assert.deepEqual(paragraphBlocks("a\nb\n\nc\nd"), ["a b", "c d"]);
 assert.deepEqual(lineBlocks("a\nb"), ["a", "b"]);
+
+const clauseLines = ["First clause, second clause continues"];
+assert.equal(splitOneLine(clauseLines, measure), true);
+assert.deepEqual(clauseLines, ["First clause,", "second clause continues"]);
+const chineseClauseLines = ["第一部分，第二部分继续"];
+assert.equal(splitOneLine(chineseClauseLines, measure), true);
+assert.deepEqual(chineseClauseLines, ["第一部分，", "第二部分继续"]);
 
 const sentenceEn = "The first sentence is here. The second sentence follows!";
 const sentenceZh = "第一句话在这里。第二句话紧随其后！";
