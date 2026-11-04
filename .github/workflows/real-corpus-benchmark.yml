@@ -81,6 +81,7 @@ jobs:
             --max-documents-per-split 20 \
             --no-cuda
       - name: Upload corpus manifest, human review queue and model results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: opensubtitles2024-en-zhcn-alignment-${{ github.run_number }}
