@@ -167,6 +167,17 @@ def align_sentence_embeddings(
 _MODEL_CACHE: dict[tuple[str, str], Any] = {}
 
 
+def clear_model_cache() -> None:
+    """Release loaded embedding models after their document vectors are materialized."""
+    import gc
+    import torch
+
+    _MODEL_CACHE.clear()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def encode_sentences(
     sentences: Sequence[str],
     model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
