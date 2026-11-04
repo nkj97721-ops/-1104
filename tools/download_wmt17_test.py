@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import gzip
 import html
 import json
 import re
@@ -50,6 +49,23 @@ def parse_sgm_segments(content: str) -> dict[tuple[str, str], str]:
     return segments
 
 
+def join_segment_pairs(
+    source: dict[tuple[str, str], str],
+    target: dict[tuple[str, str], str],
+) -> list[tuple[tuple[str, str], str, str]]:
+    if source.keys() != target.keys():
+        missing_target = sorted(source.keys() - target.keys())[:10]
+        missing_source = sorted(target.keys() - source.keys())[:10]
+        raise RuntimeError(
+            "WMT17 source/reference segment IDs do not match; refusing index-based pairing. "
+            f"Missing target IDs: {missing_target}; missing source IDs: {missing_source}"
+        )
+    def sort_key(key):
+        doc_id, seg_id = key
+        return doc_id, (0, int(seg_id)) if seg_id.isdigit() else (1, seg_id)
+    return [(key, source[key], target[key]) for key in sorted(source, key=sort_key)]
+
+
 def read_archive_members() -> tuple[str, str]:
     request = Request(ARCHIVE_URL, headers={"User-Agent": "TwinLine-WMT17-Test/1.0"})
     with urlopen(request, timeout=120) as response, tempfile.TemporaryFile() as archive_file:
@@ -83,14 +99,7 @@ def download_test_pairs(output: Path) -> dict[str, Any]:
     source_text, target_text = read_archive_members()
     source = parse_sgm_segments(source_text)
     target = parse_sgm_segments(target_text)
-    if source.keys() != target.keys():
-        missing_target = sorted(source.keys() - target.keys())[:10]
-        missing_source = sorted(target.keys() - source.keys())[:10]
-        raise RuntimeError(
-            "WMT17 source/reference segment IDs do not match; refusing index-based pairing. "
-            f"Missing target IDs: {missing_target}; missing source IDs: {missing_source}"
-        )
-
+    matched_pairs = join_segment_pairs(source, target)
     converter = OpenCC("t2s")
     counters = {
         "matched_segment_ids": len(source),
@@ -106,9 +115,9 @@ def download_test_pairs(output: Path) -> dict[str, Any]:
     temporary = output.with_name(output.name + ".partial")
     try:
         with temporary.open("w", encoding="utf-8", newline="\\n") as stream:
-            for key in sorted(source, key=lambda item: (item[0], int(item[1]) if item[1].isdigit() else item[1])):
+            for key, source_text, target_text in matched_pairs:
                 en, zh, reason = normalize_pair(
-                    {"source": source[key], "target": target[key]}, converter
+                    {"source": source_text, "target": target_text}, converter
                 )
                 if reason:
                     counters[reason] += 1
