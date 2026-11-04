@@ -107,7 +107,7 @@ python tools/align_document.py \
 
 注意：当前句子匹配保持原文顺序，不会任意重排；句向量相似度和对齐分数都不是翻译正确概率。句子层可以识别不同数量及 1:2/2:1 分组，但真实语料准确率仍需基准测试。句级模型默认使用 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`，词级模型使用 `bert-base-multilingual-cased`；两者均在本地运行；首次下载模型后可使用缓存。
 
-## 英文—简体中文真实语料准确率基准（V4）
+## 英文—简体中文真实语料基准（V4，旧版 1:1 基线）
 
 校准语料使用 **WMT News Commentary v16** 的英文—中文平行数据。官方以单个 gzip TSV 文件分发；每一行自身包含英文和对应中文，中间用 Tab 分隔。下载器直接流式解压同一文件，不再把两个独立文本文件按行号拼接，也不依赖 PyArrow。
 
@@ -133,7 +133,7 @@ python tools/benchmark_parallel.py \\
 
 \`--limit 10000\` 限制写出的校准句对数量，但下载器仍会读完整个 gzip 文件并统计所有过滤数量，以便验证压缩流完整性。两个下载器都会生成同名 \`.manifest.json\`，记录扫描数、有效数、写入数及过滤数。
 
-基准比较 MiniLM 与 LaBSE 两个句向量模型，只在 News Commentary 校准集上扫描相似度阈值和 DP gap/merge 惩罚参数，再在独立 WMT17 测试集上评估一次。测试前会剔除与校准集完全重复的英文句或中文句。报告包含 exact-match accuracy、precision、recall、F1、错配案例、所选模型及最优参数。它衡量的是这两个 WMT 语料上的句子对齐表现，不代表翻译质量或所有领域的普遍准确率。
+旧版 V4 把每条 TSV 行直接当作一个 1:1 金标准组。因此，它只能作为 1:1 行配对基线，不能验证真实文本中的句子拆分、合并或未匹配关系；其 exact-match accuracy 不得作为最终真实语料准确率。代码已保留以便复现实验，但报告现在会显式标记 `LEGACY_1_TO_1_ROW_BASELINE_NOT_FINAL_REAL_WORLD_ACCURACY`。
 
 运行基础回归测试：
 
@@ -141,3 +141,50 @@ python tools/benchmark_parallel.py \\
 python -m unittest discover -s tests -v
 ```
 
+
+
+## 真实语料人工金标准与双模型实测（V5）
+
+V4 的 1:1 行配对假设不再作为最终准确率依据。V5 新增两套真实语料来源，并把自动配对严格降级为待人工核验的候选：
+
+1. **WMT News Commentary v16 + WMT17 EN→ZH**：校准集来自 News Commentary v16；独立测试集来自 WMT17 官方英文源文与中文参考译文，按原始 `(docid, segment id)` 匹配。两侧分别重新切句，不再直接把一个 SGML segment 视为一个句子。
+2. **OpenSubtitles2024 en→zh_CN**：使用英文与简体中文字幕，不引入繁体中文、粤语或 zh_TW。上游字幕时间轴对齐仅作为 silver 候选，不是人工金标准。
+
+建立 WMT 人工核验队列：
+
+```bash
+python -m pip install opencc-python-reimplemented
+python tools/prepare_wmt_gold_queue.py \
+  --output-dir data/wmt-human-review \
+  --calibration-documents 20 \
+  --max-segments-per-document 40
+```
+
+建立 OpenSubtitles 人工核验队列：
+
+```bash
+python tools/prepare_opensubtitles2024_gold.py \
+  --output-dir data/opensubtitles2024-review \
+  --max-lines-per-document 80
+```
+
+逐篇人工核验，不允许把 silver 候选自动冒充 gold：
+
+```bash
+python tools/review_gold_queue.py \
+  --input data/wmt-human-review/annotation_queue.jsonl \
+  --output data/wmt-human-gold.jsonl \
+  --annotator "reviewer-id"
+```
+
+审核完成后，对最终人工金标准运行双模型评测：
+
+```bash
+python tools/benchmark_gold_groups.py \
+  --input data/wmt-human-gold.jsonl \
+  --output reports/wmt-human-gold-benchmark.json
+```
+
+最终评测支持 1:1、1:2、2:1、2:2 以及未匹配句子；分别报告对齐组 exact-match Precision/Recall/F1、句子链接 Precision/Recall/F1、未匹配句子指标和逐文档错配。评测器强制要求 `annotation_status=human_verified`、`annotator` 和 `reviewed_at`。测试文档不参与模型或 DP 参数选择。
+
+GitHub Actions 会下载语料、生成人工审核队列，并运行 MiniLM 与 LaBSE 对上游 silver 对齐的初步对比。该结果只用于诊断模型，不是人工金标准准确率。只有人工核验完成后，V5 gold benchmark 才能产生可报告的最终准确率。
