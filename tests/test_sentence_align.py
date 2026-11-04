@@ -82,14 +82,14 @@ class SentenceAlignmentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "finite"):
             ALIGN.align_sentence_embeddings(
                 [[1, 0]], [[1, 0]],
-                similarity_tables=([[float("nan")]], [[]], [[]])
+                similarity_tables=([[float("nan")]], [[]], [])
             )
 
     def test_rejects_similarity_table_values_outside_cosine_range(self):
         with self.assertRaisesRegex(ValueError, r"\[-1, 1\]"):
             ALIGN.align_sentence_embeddings(
                 [[1, 0]], [[1, 0]],
-                similarity_tables=([[1.01]], [[]], [[]])
+                similarity_tables=([[1.01]], [[]], [])
             )
 
 
