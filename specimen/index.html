@@ -157,8 +157,16 @@ $("alignmentFile").addEventListener("change",async event=>{
     " · EN "+item.source_span.join("–")+" / ZH "+item.target_span.join("–");
    body.append(detail);label.append(checkbox,body);list.append(label);
   });
-  $("alignmentMeta").textContent="模型："+(payload.model||"未知")+"；展示 "+Math.min(candidates.length,100)+
-   " / "+candidates.length+" 个候选。分数不是翻译正确概率；勾选前请核对上下文。";
+  const summary=payload.summary||{};
+  const unmatchedEn=(payload.unmatched_source_sentences||[]).map(item=>item.text).filter(Boolean);
+  const unmatchedZh=(payload.unmatched_target_sentences||[]).map(item=>item.text).filter(Boolean);
+  const sentenceInfo=Number.isFinite(summary.matched_sentence_groups)
+   ?"；句子组匹配 "+summary.matched_sentence_groups+" 组":"";
+  const unmatchedInfo=(unmatchedEn.length||unmatchedZh.length)
+   ?"；未匹配英文："+(unmatchedEn.join(" / ")||"无")+"；未匹配中文："+(unmatchedZh.join(" / ")||"无"):"";
+  $("alignmentMeta").textContent="模型："+(payload.engine||payload.model||payload.sentence_model||"未知")+
+   "；展示 "+Math.min(candidates.length,100)+" / "+candidates.length+" 个候选"+
+   sentenceInfo+unmatchedInfo+"。分数不是翻译正确概率；勾选前请核对上下文。";
   $("alignmentReview").hidden=false;
   $("status").textContent="已载入模型候选，请人工勾选不重叠的对应短语。";
  }catch(error){$("status").textContent="导入失败："+error.message;}
