@@ -19,13 +19,18 @@ from sentence_align import align_sentence_embeddings, encode_sentences
 
 def load_pairs(path: Path, limit: int = 0) -> list[tuple[str, str]]:
     pairs = []
+    seen = set()
     for line_no, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
         if not line.strip():
             continue
         fields = line.split("\t", 1)
         if len(fields) != 2 or not fields[0].strip() or not fields[1].strip():
             continue
-        pairs.append((fields[0].strip(), fields[1].strip()))
+        pair = (fields[0].strip(), fields[1].strip())
+        if pair in seen:
+            continue
+        seen.add(pair)
+        pairs.append(pair)
         if limit and len(pairs) >= limit:
             break
     if len(pairs) < 100:
@@ -34,8 +39,11 @@ def load_pairs(path: Path, limit: int = 0) -> list[tuple[str, str]]:
 
 
 def make_blocks(pairs: list[tuple[str, str]], block_size: int) -> list[list[tuple[str, str]]]:
-    return [pairs[i:i + block_size] for i in range(0, len(pairs), block_size)
-            if len(pairs[i:i + block_size]) >= max(5, block_size // 2)]
+    # Use full blocks only so concatenated calibration/test vectors have no gaps.
+    return [
+        pairs[i:i + block_size]
+        for i in range(0, len(pairs) - block_size + 1, block_size)
+    ]
 
 
 def build_similarity_tables(vectors: list[list[float]], n: int):
@@ -148,7 +156,8 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--input", required=True, help="UTF-8 TSV: English<TAB>Chinese, one gold pair per row")
+    ap.add_argument("--input", required=True, help="Calibration TSV: English<TAB>Chinese, one gold pair per row")
+    ap.add_argument("--test-input", help="Optional separate held-out TSV; if omitted, split --input contiguously")
     ap.add_argument("--output", default="alignment-benchmark.json")
     ap.add_argument(
         "--models",
@@ -165,17 +174,62 @@ def main() -> None:
 
     if args.block_size < 2:
         raise ValueError("--block-size 必须至少为 2。")
-    pairs = load_pairs(Path(args.input), args.limit)
-    blocks = make_blocks(pairs, args.block_size)
-    if len(blocks) < 5:
-        raise ValueError("至少需要 5 个完整测试块，建议准备 500 条以上平行句对。")
-    # Keep the source order intact: a contiguous held-out tail is less likely
-    # to share adjacent subtitle context with calibration than random blocks.
-    dev_count = max(1, round(len(blocks) * 0.2))
-    dev_ids = set(range(dev_count))
-    test_ids = set(range(dev_count, len(blocks)))
-    if not test_ids:
-        raise ValueError("测试集为空；请增加语料或减小 block-size。")
+    calibration_pairs = load_pairs(Path(args.input), args.limit)
+    if args.test_input:
+        raw_test_pairs = load_pairs(Path(args.test_input))
+        calibration_en = {en for en, _ in calibration_pairs}
+        calibration_zh = {zh for _, zh in calibration_pairs}
+        test_pairs = [
+            pair for pair in raw_test_pairs
+            if pair[0] not in calibration_en and pair[1] not in calibration_zh
+        ]
+        overlap_removed = len(raw_test_pairs) - len(test_pairs)
+        dev_blocks = make_blocks(calibration_pairs, args.block_size)
+        test_blocks = make_blocks(test_pairs, args.block_size)
+        if len(dev_blocks) < 5 or len(test_blocks) < 5:
+            raise ValueError("独立校准集和测试集都至少需要 5 个完整块。")
+        used_calibration = len(dev_blocks) * args.block_size
+        used_test = len(test_blocks) * args.block_size
+        pairs = calibration_pairs[:used_calibration] + test_pairs[:used_test]
+        blocks = dev_blocks + test_blocks
+        dev_ids = set(range(len(dev_blocks)))
+        test_ids = set(range(len(dev_blocks), len(blocks)))
+        split_report = {
+            "strategy": "separate_calibration_corpus_and_official_heldout_test",
+            "calibration_source": str(Path(args.input)),
+            "test_source": str(Path(args.test_input)),
+            "exact_monolingual_overlap_removed": overlap_removed,
+            "calibration_blocks": len(dev_ids),
+            "test_blocks": len(test_ids),
+            "document_independence": (
+                "Calibration and held-out data come from separate WMT releases. "
+                "The WMT17 test downloader matched source/reference segments by "
+                "(document ID, segment ID); exact source/target sentence overlap "
+                "with calibration data was removed."
+            ),
+        }
+    else:
+        pairs = calibration_pairs
+        blocks = make_blocks(pairs, args.block_size)
+        if len(blocks) < 5:
+            raise ValueError("至少需要 5 个完整测试块，建议准备 500 条以上平行句对。")
+        dev_count = max(1, round(len(blocks) * 0.2))
+        dev_ids = set(range(dev_count))
+        test_ids = set(range(dev_count, len(blocks)))
+        if len(test_ids) < 5:
+            raise ValueError("连续留出测试集至少需要 5 个完整块。")
+        used_pairs = len(blocks) * args.block_size
+        pairs = pairs[:used_pairs]
+        split_report = {
+            "strategy": "contiguous_prefix_calibration_suffix_heldout",
+            "calibration_blocks": len(dev_ids),
+            "test_blocks": len(test_ids),
+            "document_independence": (
+                "The source dataset does not expose stable document IDs; "
+                "contiguous holdout reduces adjacent-block leakage but cannot prove "
+                "document-level independence."
+            ),
+        }
 
     thresholds = sorted({float(x) for x in args.thresholds.split(",")})
     if not thresholds or any(not math.isfinite(x) or not -1.0 <= x <= 1.0 for x in thresholds):
@@ -298,18 +352,12 @@ def main() -> None:
     report = {
         "corpus": str(Path(args.input)),
         "corpus_sentence_pairs": len(pairs),
+        "calibration_sentence_pairs": sum(len(blocks[i]) for i in dev_ids),
+        "heldout_sentence_pairs": sum(len(blocks[i]) for i in test_ids),
         "block_size": args.block_size,
         "candidate_models": model_names,
-        "split": {
-            "strategy": "contiguous_prefix_calibration_suffix_heldout",
-            "dev_blocks": len(dev_ids),
-            "test_blocks": len(test_ids),
-            "document_independence": (
-                "The source dataset does not expose stable movie/document IDs; "
-                "contiguous holdout reduces adjacent-block leakage but cannot prove "
-                "document-level independence."
-            ),
-        },
+        "test_corpus": str(Path(args.test_input)) if args.test_input else None,
+        "split": split_report,
         "model_calibrations": model_calibrations,
         "selected_model": selected_model,
         "selected_threshold": selected_threshold,
@@ -320,15 +368,13 @@ def main() -> None:
         "heldout_improvement_over_baseline": improvement,
         "heldout_block_details": heldout_rows,
         "methodology": (
-            "Gold alignment is the original parallel-corpus row pairing. Contiguous blocks "
-            "are split before model/threshold selection. Model and threshold are selected "
-            "using calibration blocks only; held-out blocks are evaluated once. Exact 1:1 "
-            "links count as correct; wrong links, 1:n/n:1 groups, and unmatched sentences "
-            "are separately reported. Exact-match accuracy is exact links divided by gold pairs. "
-            "The source does not expose stable document IDs, so the contiguous held-out tail "
-            "is separated from calibration but cannot guarantee movie-level independence. "
-            "This benchmark measures sentence alignment, not "
-            "word/phrase translation correctness."
+            "Gold alignment is the original parallel-corpus row pairing. Model and DP "
+            "parameters are selected using calibration blocks only; held-out blocks are "
+            "evaluated once. Exact 1:1 links count as correct; wrong links, 1:n/n:1 groups, "
+            "and unmatched sentences are separately reported. Exact-match accuracy is "
+            "exact links divided by gold pairs. When --test-input is supplied, the test "
+            "corpus is a separate WMT release and exact monolingual overlaps are removed. "
+            "This benchmark measures sentence alignment, not word/phrase translation correctness."
         ),
     }
     Path(args.output).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

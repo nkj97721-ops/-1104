@@ -51,6 +51,24 @@ class CorpusFilteringTests(unittest.TestCase):
             ("Hello world", "你 好 世界", None),
         )
 
+    def test_parses_one_paired_tsv_record(self):
+        self.assertEqual(
+            CORPUS.parse_parallel_line("Hello world" + chr(9) + "你好世界" + chr(10)),
+            {"source": "Hello world", "target": "你好世界"},
+        )
+
+    def test_tsv_parser_splits_only_at_first_tab(self):
+        self.assertEqual(
+            CORPUS.parse_parallel_line("Hello" + chr(9) + "你好" + chr(9) + "附注"),
+            {"source": "Hello", "target": "你好" + chr(9) + "附注"},
+        )
+
+    def test_malformed_tsv_line_is_rejected_as_empty(self):
+        self.assertEqual(
+            CORPUS.parse_parallel_line("no separator here"),
+            {"source": "", "target": ""},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -51,33 +51,42 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_sentence*.py' -v
           python -m unittest discover -s tests -p 'test_download_parallel_corpus.py' -v
+          python -m unittest discover -s tests -p 'test_wmt17_test.py' -v
+          python -m unittest discover -s tests -p 'test_benchmark_parallel.py' -v
 
-      - name: Fetch paired OPUS OpenSubtitles rows through the Dataset Viewer API
+      - name: Download paired WMT News Commentary v16 TSV
         run: |
           python tools/download_parallel_corpus.py \
-            --output data/opensubtitles-en-zh-cn.tsv \
+            --output data/news-commentary-en-zh.tsv \
             --limit 10000
+
+      - name: Download independent official WMT17 EN-ZH test set
+        run: |
+          python tools/download_wmt17_test.py --output data/wmt17-en-zh-test.tsv
 
       - name: Compare models and tune threshold plus DP penalties
         run: |
           mkdir -p reports
           python tools/benchmark_parallel.py \
-            --input data/opensubtitles-en-zh-cn.tsv \
+            --input data/news-commentary-en-zh.tsv \
+            --test-input data/wmt17-en-zh-test.tsv \
             --models sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE \
             --block-size 20 \
             --thresholds 0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60 \
             --gap-penalties 0.06,0.12,0.18,0.24 \
             --merge-penalties 0.02,0.06,0.10,0.14 \
-            --output reports/opensubtitles-zh-cn-benchmark.json
+            --output reports/news-commentary-en-zh-benchmark.json
 
       - name: Upload corpus benchmark report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: opensubtitles-zh-cn-parallel-benchmark
+          name: news-commentary-en-zh-parallel-benchmark
           path: |
             reports/
-            data/opensubtitles-en-zh-cn.tsv
-            data/opensubtitles-en-zh-cn.tsv.manifest.json
+            data/news-commentary-en-zh.tsv
+            data/news-commentary-en-zh.tsv.manifest.json
+            data/wmt17-en-zh-test.tsv
+            data/wmt17-en-zh-test.tsv.manifest.json
           if-no-files-found: warn
           retention-days: 30
