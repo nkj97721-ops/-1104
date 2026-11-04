@@ -14,10 +14,10 @@ from typing import Any
 
 try:
     from .benchmark_gold_groups import aggregate, evaluate_document
-    from .sentence_align import encode_sentences
+    from .sentence_align import clear_model_cache, encode_sentences
 except ImportError:
     from benchmark_gold_groups import aggregate, evaluate_document
-    from sentence_align import encode_sentences
+    from sentence_align import clear_model_cache, encode_sentences
 
 
 def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -114,6 +114,7 @@ def main() -> None:
             )
             for x in docs
         }
+        clear_model_cache()
         candidates = []
         for threshold, gap, merge in itertools.product(thresholds, gaps, merges):
             rows = [
