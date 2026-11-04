@@ -387,6 +387,8 @@ def main() -> None:
     }
 
     report = {
+        "benchmark_status": "LEGACY_1_TO_1_ROW_BASELINE_NOT_FINAL_REAL_WORLD_ACCURACY",
+        "not_final_accuracy": True,
         "corpus": str(Path(args.input)),
         "corpus_sentence_pairs": len(pairs),
         "calibration_sentence_pairs": sum(len(blocks[i]) for i in dev_ids),
