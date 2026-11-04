@@ -10,7 +10,10 @@ const { chromium } = require("playwright");
   await page.goto(pathToFileURL(path.resolve(__dirname,"../specimen/index.html")).href);
   await page.evaluate(()=>document.fonts.ready);
   const alignmentFixture={
-   model:"fixture-model",
+   engine:"fixture-engine",
+   summary:{matched_sentence_groups:2},
+   unmatched_source_sentences:[{index:2,text:"extra sentence."}],
+   unmatched_target_sentences:[],
    phrase_candidates:[
     {source:"take a",target:"仔细",source_span:[0,1],target_span:[0,0],score:0.88,confidence_band:"high"},
     {source:"closer look",target:"看一看",source_span:[2,3],target_span:[1,1],score:0.86,confidence_band:"high"}
