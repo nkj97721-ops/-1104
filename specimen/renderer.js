@@ -149,6 +149,10 @@
   function preparePairs(english, chinese, mode) {
     const errors = [];
     const pairs = [];
+    if (!String(english || "").trim() || !String(chinese || "").trim()) {
+      errors.push("英文和中文都必须填写。");
+      return { pairs, errors };
+    }
     if (mode === "lines") {
       const en = lineBlocks(english);
       const zh = lineBlocks(chinese);
