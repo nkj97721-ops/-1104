@@ -77,3 +77,53 @@ sample from being reported as a reliable corpus-level score.
   `annotator`, and `reviewed_at`.
 
 Both MiniLM and LaBSE are calibrated independently by default and each is evaluated on the same held-out documents. The deployable candidate is selected using calibration scores only; held-out scores are never used for model selection.
+
+
+## Original boundary provenance is a separate track
+
+The automatic OpenSubtitles/WMT JSONL records preserve the raw paired-line or
+parallel-segment identity for every sentence:
+
+```json
+{
+  "source": ["Can you rule that out?", "I cannot rule that out."],
+  "target": ["你能排除这种可能吗？", "不能排除。"],
+  "source_sentence_origins": [
+    {"boundary_id": "movie-7:line:10", "boundary_index": 10, "sentence_index": 0},
+    {"boundary_id": "movie-7:line:11", "boundary_index": 11, "sentence_index": 0}
+  ],
+  "target_sentence_origins": [
+    {"boundary_id": "movie-7:line:10", "boundary_index": 10, "sentence_index": 0},
+    {"boundary_id": "movie-7:line:11", "boundary_index": 11, "sentence_index": 0}
+  ],
+  "boundary_metadata_status": "preserved_original_aligned_subtitle_line_ids"
+}
+```
+
+- `boundary_id` is the original aligned subtitle-line or parallel-segment key.
+  All sentences split from one raw line retain the same ID.
+- The source and target origins are stored separately, with exactly one origin
+  per sentence. Their IDs identify the upstream paired unit, not a semantic
+  sentence-level translation judgement.
+- WMT17 uses the original document and segment key. News Commentary calibration
+  rows receive stable row ordinals because that input is consumed as ordered
+  parallel rows.
+- Oversize groups and unmatched lines retain their sentence origins too.
+- Filtering/reindexing during benchmarking also reindexes the provenance arrays;
+  malformed or mis-sized arrays are rejected.
+- The embedding model and dynamic-programming semantic aligner do not consume
+  these IDs. They remain diagnostic provenance, preventing source-boundary
+  labels from leaking into semantic predictions.
+
+**Two different questions must not share one score:**
+
+1. Sentence-link F1 asks whether the predicted English/Chinese sentence links
+   are correct.
+2. Exact group F1 on these automatic references asks whether the prediction
+   reproduces the upstream subtitle-line/parallel-segment grouping. It is
+   boundary-provenance agreement, not verified semantic group accuracy.
+
+When the original paired line/segment keys are available at inference time, a
+separate boundary-aware output can be produced from that evidence. When they
+are unavailable, the semantic aligner must not invent them from embeddings;
+semantic alignment and original line grouping are then separately reported.
