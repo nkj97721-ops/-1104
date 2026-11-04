@@ -14,7 +14,7 @@ const { chromium } = require("playwright");
   await page.locator("#mode").selectOption("phrases");
   await page.waitForFunction(()=>document.querySelectorAll("#preview .pair").length===3);
   let phraseData=await page.evaluate(()=>Array.from(document.querySelectorAll("#preview .pair")).map(p=>({
-   en:Array.from(p.querySelectorAll(".en")).map(x=>x.textContent).join("").replace(/\\s/g,""),
+   en:Array.from(p.querySelectorAll(".en")).map(x=>x.textContent).join("").replace(/\s/g,""),
    zh:Array.from(p.querySelectorAll(".zh")).map(x=>x.textContent).join("")
   })));
   assert.deepEqual(phraseData,[
