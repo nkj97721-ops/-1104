@@ -61,6 +61,8 @@ For every document, inspect the English and Simplified Chinese text, then:
 
 - `a`: accept the proposed groups only after checking every link.
 - `e`: enter a corrected JSON array of groups.
+- `r`: manually correct sentence boundaries on either side and enter the
+  corrected groups in one JSON object.
 - `s`: skip the document for later review.
 
 The reviewer must correct segmentation or grouping errors. Any group larger
