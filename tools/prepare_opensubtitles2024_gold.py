@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Download the official OpenSubtitles2024 EN/zh_CN multiset and create a review queue.
+"""Download OpenSubtitles2024 EN/zh_CN and build an automatic silver-reference corpus.
 
-The upstream links are subtitle-timing alignments (silver labels), NOT human
-gold. This script preserves those links only as proposed groups for review.
+The upstream links are subtitle-timing alignments and remain weak silver references.
+No human review is required or implied by this pipeline.
 """
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ def split_aligned_lines(source_lines: list[str], target_lines: list[str]) -> tup
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--output-dir", default="data/opensubtitles2024-review")
+    ap.add_argument("--output-dir", default="data/opensubtitles2024-silver")
     ap.add_argument("--max-lines-per-document", type=int, default=80)
     args = ap.parse_args()
     if args.max_lines_per_document < 1:
@@ -170,7 +170,7 @@ def main() -> None:
         "source_git_blob_sha1": EXPECTED_GIT_BLOB_SHA,
         "languages": ["en", "zh_CN"],
         "excluded_languages": ["zh_TW", "yue", "all other language variants"],
-        "alignment_reference": "automatic subtitle-timing alignment; silver proposals only, not human gold",
+        "alignment_reference": "automatic subtitle-timing alignment; weak silver reference only, not human-verified semantic gold",
         "split_policy": "movie-level holdout; final sorted 25% of movie IDs are test, all other movies calibration",
         "max_lines_per_document": args.max_lines_per_document,
         "movies": {},
@@ -206,11 +206,12 @@ def main() -> None:
                     "proposed_groups": groups,
                     "proposed_unmatched_source": unmatched_s,
                     "proposed_unmatched_target": unmatched_t,
-                    "annotation_status": "pending_human_review",
-                    "annotation_instructions": (
-                        "Inspect the English and Simplified Chinese text. Correct proposed_groups, "
-                        "then copy verified groups into gold and set annotation_status=human_verified, "
-                        "annotator and reviewed_at. Do not trust the automatic subtitle-timing links blindly."
+                    "reference_status": "automatic_silver_reference",
+                    "reference_provenance": "OpenSubtitles2024 upstream subtitle-timing alignment",
+                    "reference_notes": (
+                        "Original aligned subtitle lines are weak silver references. Sentence groups are "
+                        "derived by independently splitting both sides; no manual verification is claimed. "
+                        "The upstream alignment is not verified semantic gold."
                     ),
                 }
                 writer.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -236,7 +237,7 @@ def main() -> None:
     )
     print(json.dumps({
         "archive": str(archive_path),
-        "annotation_queue": str(queue_path),
+        "silver_reference_corpus": str(queue_path),
         "manifest": str(out_dir / "manifest.json"),
         "counts": manifest["counts"],
     }, ensure_ascii=False, indent=2))
