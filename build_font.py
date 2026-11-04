@@ -70,13 +70,59 @@ def split_text_to_width(text, cmap, metrics, scale, max_width):
     return lines
 
 
+def split_line_in_two(text, cmap, metrics, scale):
+    """Split one already-fitting line near its visual midpoint without losing text."""
+    if len(text) < 2:
+        return None
+    tokens = re.findall(r"\\S+\\s*|\\s+", text)
+    boundaries = []
+    consumed = ""
+    total_width = glyph_advance(text, cmap, metrics, scale)
+    for token in tokens[:-1]:
+        consumed += token
+        rest = text[len(consumed):]
+        if consumed.strip() and rest.strip():
+            boundaries.append((abs(glyph_advance(consumed, cmap, metrics, scale) - total_width / 2), len(consumed)))
+    if boundaries:
+        _, cut = min(boundaries)
+        return text[:cut], text[cut:]
+    chars = list(text)
+    if len(chars) < 2:
+        return None
+    cut = len(chars) // 2
+    return "".join(chars[:cut]), "".join(chars[cut:])
+
+
+def balance_wrapped_lines(lines, target_count, cmap, metrics, scale):
+    """Give both languages the same row count while preserving their original order."""
+    lines = list(lines)
+    while len(lines) < target_count:
+        candidates = sorted(
+            (i for i, line in enumerate(lines) if len(line) > 1),
+            key=lambda i: glyph_advance(lines[i], cmap, metrics, scale),
+            reverse=True,
+        )
+        split = None
+        for index in candidates:
+            split = split_line_in_two(lines[index], cmap, metrics, scale)
+            if split and split[0] and split[1]:
+                lines[index:index + 1] = list(split)
+                break
+        else:
+            # A one-character line cannot be subdivided; retain an explicit blank partner row.
+            lines.append("")
+    return lines
+
+
 def expand_pairs(pairs, latin_cmap, latin_metrics, cjk_cmap, cjk_metrics, max_width):
-    """Turn long bilingual pairs into ordered, width-safe glyph rows."""
+    """Turn long bilingual pairs into ordered, width-safe, equally numbered glyph rows."""
     expanded = []
     for pair_index, pair in enumerate(pairs, 1):
         en_parts = split_text_to_width(pair["en"], latin_cmap, latin_metrics, 0.48, max_width)
         zh_parts = split_text_to_width(pair["zh"], cjk_cmap, cjk_metrics, 0.48, max_width)
         count = max(len(en_parts), len(zh_parts))
+        en_parts = balance_wrapped_lines(en_parts, count, latin_cmap, latin_metrics, 0.48)
+        zh_parts = balance_wrapped_lines(zh_parts, count, cjk_cmap, cjk_metrics, 0.48)
         for part_index in range(count):
             expanded.append({
                 "en": en_parts[part_index] if part_index < len(en_parts) else "",
