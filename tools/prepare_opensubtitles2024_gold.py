@@ -133,9 +133,8 @@ def main() -> None:
     by_movie: dict[str, dict[str, list[str]]] = {}
     member_names = []
     with zipfile.ZipFile(archive_path) as zf:
-        bad_member = zf.testzip()
-        if bad_member:
-            raise RuntimeError(f"ZIP CRC check failed at {bad_member}")
+        # Members are password-protected. CRC is verified by ZipFile.read
+        # after read_member supplies the upstream password.
         for info in zf.infolist():
             if info.is_dir():
                 continue
