@@ -38,13 +38,31 @@ def make_blocks(pairs: list[tuple[str, str]], block_size: int) -> list[list[tupl
             if len(pairs[i:i + block_size]) >= max(5, block_size // 2)]
 
 
+def build_similarity_tables(vectors: list[list[float]], n: int):
+    """Vectorize all 1:1, 1:2 and 2:1 cosine scores once per block."""
+    import numpy as np
+
+    source = np.asarray(vectors[:n], dtype=np.float32)
+    target = np.asarray(vectors[n:], dtype=np.float32)
+    source = source / np.maximum(np.linalg.norm(source, axis=1, keepdims=True), 1e-12)
+    target = target / np.maximum(np.linalg.norm(target, axis=1, keepdims=True), 1e-12)
+    target_pairs = (target[:-1] + target[1:]) * 0.5
+    source_pairs = (source[:-1] + source[1:]) * 0.5
+    return (
+        source @ target.T,
+        source @ target_pairs.T,
+        source_pairs @ target.T,
+    )
+
+
 def evaluate_block(block: list[tuple[str, str]], vectors: list[list[float]],
                    threshold: float, gap_penalty: float = 0.12,
-                   merge_penalty: float = 0.06) -> dict[str, Any]:
+                   merge_penalty: float = 0.06, similarity_tables=None) -> dict[str, Any]:
     n = len(block)
     result = align_sentence_embeddings(
         vectors[:n], vectors[n:], threshold=threshold,
         gap_penalty=gap_penalty, merge_penalty=merge_penalty,
+        similarity_tables=similarity_tables,
     )
     counts: Counter[str] = Counter()
     exact = 0
@@ -177,13 +195,20 @@ def main() -> None:
         merge_penalties = sorted({float(x) for x in args.merge_penalties.split(",")})
         if any(x < 0 for x in gap_penalties + merge_penalties):
             raise ValueError("DP 惩罚参数不能为负数。")
+        # Cache vectorized cosine transition scores once; the parameter grid
+        # then performs only lightweight dynamic-programming table lookups.
+        similarity_cache = {
+            i: build_similarity_tables(encoded[i], len(blocks[i]))
+            for i in sorted(dev_ids | test_ids)
+        }
         calibration = []
         for threshold in thresholds:
             for gap_penalty in gap_penalties:
                 for merge_penalty in merge_penalties:
                     rows = [
                         evaluate_block(blocks[i], encoded[i], threshold,
-                                       gap_penalty, merge_penalty)
+                                       gap_penalty, merge_penalty,
+                                       similarity_cache[i])
                         for i in sorted(dev_ids)
                     ]
                     calibration.append({
@@ -210,6 +235,17 @@ def main() -> None:
     selected_merge_penalty = selected["best_on_dev"]["merge_penalty"]
     selected_vectors = model_vectors[selected_model]
     pair_count = len(pairs)
+    selected_similarity_cache = {}
+    offset_for_cache = 0
+    for index, block in enumerate(blocks):
+        size = len(block)
+        if index in test_ids:
+            block_vectors = (
+                selected_vectors[offset_for_cache:offset_for_cache + size]
+                + selected_vectors[pair_count + offset_for_cache:pair_count + offset_for_cache + size]
+            )
+            selected_similarity_cache[index] = build_similarity_tables(block_vectors, size)
+        offset_for_cache += size
     heldout_rows = []
     offset = 0
     for index, block in enumerate(blocks):
@@ -221,7 +257,8 @@ def main() -> None:
             )
             heldout_rows.append(
                 evaluate_block(block, block_vectors, selected_threshold,
-                               selected_gap_penalty, selected_merge_penalty)
+                               selected_gap_penalty, selected_merge_penalty,
+                               selected_similarity_cache[index])
             )
         offset += size
     # Baseline: selected model with the pre-calibration default DP settings.
@@ -235,7 +272,8 @@ def main() -> None:
                 + selected_vectors[pair_count + offset:pair_count + offset + size]
             )
             baseline_rows.append(
-                evaluate_block(block, block_vectors, 0.35, 0.12, 0.06)
+                evaluate_block(block, block_vectors, 0.35, 0.12, 0.06,
+                               similarity_cache.get(index) or build_similarity_tables(block_vectors, size))
             )
         offset += size
     baseline_summary = aggregate(baseline_rows)
