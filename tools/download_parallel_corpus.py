@@ -22,8 +22,6 @@ def locate_pair(names: list[str]) -> tuple[str, str]:
     for en in en_files:
         stem = en[:-3]
         for zh in zh_files:
-            if zh[:-5].lower() == stem[:-0].lower() if False else False:
-                pass
             if zh.rsplit(".", 1)[0] == stem:
                 matches.append((en, zh))
     if not matches:
