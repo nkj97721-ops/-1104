@@ -67,9 +67,8 @@ def align_sentence_embeddings(
     dimensions = {len(vector) for vector in vectors}
     if len(dimensions) > 1 or (dimensions and 0 in dimensions):
         raise ValueError("All sentence vectors must have the same non-zero dimension")
-    if similarity_tables is None:
-        if any(not math.isfinite(float(value)) for vector in vectors for value in vector):
-            raise ValueError("Sentence vectors must contain only finite values")
+    if any(not math.isfinite(float(value)) for vector in vectors for value in vector):
+        raise ValueError("Sentence vectors must contain only finite values")
 
     if similarity_tables is not None:
         if len(similarity_tables) != 3:
@@ -81,6 +80,12 @@ def align_sentence_embeddings(
                 shape = (len(table), len(table[0]) if len(table) else 0)
             if tuple(shape) != expected:
                 raise ValueError(f"Similarity table shape {tuple(shape)} does not match {expected}")
+            # Reject invalid cached cosine values before they enter DP scoring.
+            for row in table:
+                for value in row:
+                    score = float(value)
+                    if not math.isfinite(score) or score < -1.0 or score > 1.0:
+                        raise ValueError("Similarity table values must be finite and within [-1, 1]")
 
     neg_inf = float("-inf")
     dp = [[neg_inf] * (m + 1) for _ in range(n + 1)]
