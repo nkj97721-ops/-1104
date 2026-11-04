@@ -10,13 +10,13 @@ import benchmark_parallel as BENCHMARK
 
 class BenchmarkDataTests(unittest.TestCase):
     def test_load_pairs_deduplicates_exact_pairs(self):
+        expected = [(f"Hello {i}", f"你好{i}") for i in range(100)]
+        lines = [en + chr(9) + zh for en, zh in expected]
+        lines.append(lines[0])
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "pairs.tsv"
-            path.write_text("Hello\t你好\nHello\t你好\nWorld\t世界\n", encoding="utf-8")
-            self.assertEqual(
-                BENCHMARK.load_pairs(path),
-                [("Hello", "你好"), ("World", "世界")],
-            )
+            path.write_text(chr(10).join(lines) + chr(10), encoding="utf-8")
+            self.assertEqual(BENCHMARK.load_pairs(path), expected)
 
     def test_make_blocks_uses_only_complete_blocks(self):
         pairs = [(f"en-{i}", f"中-{i}") for i in range(45)]
