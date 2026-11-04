@@ -68,7 +68,7 @@ class SentenceAlignmentTests(unittest.TestCase):
             merge_penalty=0.0, two_two_penalty=0.1,
         )
         high_penalty = ALIGN.align_sentence_embeddings(
-            source, target, threshold=0.6, gap_penalty=0.01,
+            source, target, threshold=0.9, gap_penalty=0.01,
             merge_penalty=0.0, two_two_penalty=1.0,
         )
         self.assertEqual(
