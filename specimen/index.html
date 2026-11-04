@@ -3,47 +3,99 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>双层中英字体 V2 · 排版验证</title>
+<title>双层中英排版器 V2</title>
 <style>
-:root { color-scheme: dark; --bg:#050505; --fg:#f3f3f3; --muted:#aaa; }
-* { box-sizing:border-box; }
-body { margin:0; padding:28px 20px 48px; background:var(--bg); color:var(--fg);
-  font-family:Arial,"Noto Sans SC",sans-serif; }
-main { max-width:760px; margin:auto; }
-h1 { margin:0 0 8px; font-size:22px; font-weight:600; letter-spacing:.02em; }
-.note { color:var(--muted); font-size:13px; line-height:1.6; margin-bottom:28px; }
-.pair { display:grid; gap:2px; padding:14px 0 16px; border-bottom:1px solid #252525; }
-.en { font-size:25px; line-height:1.04; letter-spacing:.005em; font-weight:500; }
-.zh { font-size:20px; line-height:1.05; letter-spacing:.015em; font-weight:400; }
-.controls { display:flex; gap:12px; flex-wrap:wrap; margin:20px 0 24px; color:var(--muted); font-size:13px; }
-label { display:flex; gap:8px; align-items:center; }
-input { accent-color:white; }
-@media (max-width:480px) { body { padding:22px 16px 36px; } .en{font-size:22px;} .zh{font-size:18px;} }
+:root{color-scheme:dark;--bg:#050505;--panel:#101010;--line:#292929;--fg:#f4f4f4;--muted:#a4a4a4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Arial,"Noto Sans SC",sans-serif;padding:24px 16px 48px}
+main{max-width:980px;margin:auto}
+h1{font-size:22px;letter-spacing:.02em;margin:0 0 7px}
+.note{font-size:13px;line-height:1.6;color:var(--muted);margin-bottom:20px}
+.editor{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{display:block;font-size:13px;color:var(--muted)}
+textarea{display:block;width:100%;min-height:170px;margin-top:7px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--fg);font:15px/1.6 ui-monospace,monospace;resize:vertical}
+.controls{display:flex;flex-wrap:wrap;gap:16px 22px;padding:16px 0;align-items:center}
+.control{min-width:145px;display:grid;gap:7px}
+.control span{font-size:12px;color:var(--muted)}
+input[type=range]{width:150px;accent-color:white}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 16px}
+button{border:1px solid #444;border-radius:9px;background:#171717;color:#fff;padding:10px 14px;font-size:13px}
+button:active{background:#292929}
+.status{min-height:20px;color:#d5b66a;font-size:12px;margin:0 0 8px}
+.preview{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
+.pair{display:grid;gap:var(--gap);padding:15px 0 17px;border-bottom:1px solid #242424;break-inside:avoid;page-break-inside:avoid}
+.en,.zh{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal}
+.en{font-size:var(--en-size);line-height:1.08;font-weight:500;letter-spacing:.005em}
+.zh{font-size:var(--zh-size);line-height:1.08;font-weight:400;letter-spacing:.015em}
+.empty{color:#777;padding:28px 0;font-size:14px}
+@media(max-width:620px){.editor{grid-template-columns:1fr}.controls{gap:12px}.control{min-width:calc(50% - 12px)}}
 </style>
 </head>
 <body>
 <main>
-<h1>双层中英字体 V2</h1>
-<div class="note">英文在上，中文在下。每组两行作为一个整体；此页面用于验证比例与行距，尚非最终字体文件。</div>
-<div class="controls">
-<label>整体字号 <input id="scale" type="range" min="16" max="36" value="25"></label>
-<label>层间距 <input id="gap" type="range" min="0" max="10" value="2"></label>
+<h1>双层中英排版器 V2</h1>
+<div class="note">逐行配对：上面英文，下面中文。每一对锁定为一个排版单元，页面不会擅自翻译或错配。这里验证的是双层排版机制，不把排版器冒充成系统字体。</div>
+<div class="editor">
+<label>英文（每行一条）
+<textarea id="english" spellcheck="false">The quick brown fox jumps over the lazy dog.
+Typography is the art of arranging type.
+One thought, two languages, one visual unit.
+Precision comes from proportion and spacing.</textarea>
+</label>
+<label>中文（行数、顺序与英文对应）
+<textarea id="chinese" spellcheck="false">敏捷的棕色狐狸跳过了那只懒狗。
+字体排印是安排文字的艺术。
+一种思想，两种语言，一个视觉整体。
+精确感来自比例与间距。</textarea>
+</label>
 </div>
-<section id="specimen">
-<div class="pair"><div class="en">The quick brown fox jumps over the lazy dog.</div><div class="zh">敏捷的棕色狐狸跳过了那只懒狗。</div></div>
-<div class="pair"><div class="en">Typography is the art of arranging type.</div><div class="zh">字体排印是安排文字的艺术。</div></div>
-<div class="pair"><div class="en">One thought, two languages, one visual unit.</div><div class="zh">一种思想，两种语言，一个视觉整体。</div></div>
-<div class="pair"><div class="en">Precision comes from proportion and spacing.</div><div class="zh">精确感来自比例与间距。</div></div>
-</section>
+<div class="controls">
+<label class="control"><span>英文大小：<b id="enValue">25 px</b></span><input id="enSize" type="range" min="14" max="42" value="25"></label>
+<label class="control"><span>中文大小：<b id="zhValue">20 px</b></span><input id="zhSize" type="range" min="12" max="36" value="20"></label>
+<label class="control"><span>两层间距：<b id="gapValue">2 px</b></span><input id="gapSize" type="range" min="0" max="12" value="2"></label>
+</div>
+<div class="actions">
+<button id="example" type="button">恢复示例</button>
+<button id="download" type="button">导出双层排版 HTML</button>
+</div>
+<div class="status" id="status" role="status" aria-live="polite"></div>
+<section class="preview" id="preview" aria-label="双层排版预览"></section>
 </main>
 <script>
-const scale=document.querySelector('#scale'), gap=document.querySelector('#gap');
+const $=id=>document.getElementById(id);
+const sampleEn=['The quick brown fox jumps over the lazy dog.','Typography is the art of arranging type.','One thought, two languages, one visual unit.','Precision comes from proportion and spacing.'];
+const sampleZh=['敏捷的棕色狐狸跳过了那只懒狗。','字体排印是安排文字的艺术。','一种思想，两种语言，一个视觉整体。','精确感来自比例与间距。'];
+const esc=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function lines(id){return $(id).value.replace(/\r/g,'').split('\n');}
 function update(){
- document.querySelectorAll('.en').forEach(x=>x.style.fontSize=scale.value+'px');
- document.querySelectorAll('.zh').forEach(x=>x.style.fontSize=(scale.value*.8)+'px');
- document.querySelectorAll('.pair').forEach(x=>x.style.gap=gap.value+'px');
+ const en=lines('english'),zh=lines('chinese'),count=Math.max(en.length,zh.length);
+ const enSize=+$('enSize').value,zhSize=+$('zhSize').value,gap=+$('gapSize').value;
+ $('enValue').textContent=enSize+' px';$('zhValue').textContent=zhSize+' px';$('gapValue').textContent=gap+' px';
+ const root=$('preview');root.style.setProperty('--en-size',enSize+'px');root.style.setProperty('--zh-size',zhSize+'px');root.style.setProperty('--gap',gap+'px');root.replaceChildren();
+ for(let i=0;i<count;i++){
+  if(!en[i]&&!zh[i])continue;
+  const pair=document.createElement('div');pair.className='pair';
+  const top=document.createElement('p');top.className='en';top.textContent=en[i]??'';
+  const bottom=document.createElement('p');bottom.className='zh';bottom.textContent=zh[i]??'';
+  pair.append(top,bottom);root.append(pair);
+ }
+ const status=$('status');
+ if(en.length!==zh.length)status.textContent='行数不一致：英文 '+en.length+' 行，中文 '+zh.length+' 行。缺失行会留空，不会自动错位。';
+ else status.textContent='已配对 '+en.length+' 行。';
 }
-scale.addEventListener('input',update); gap.addEventListener('input',update); update();
+function exportHtml(){
+ const en=lines('english'),zh=lines('chinese'),count=Math.max(en.length,zh.length);
+ const enSize=+$('enSize').value,zhSize=+$('zhSize').value,gap=+$('gapSize').value;
+ const pairs=[];
+ for(let i=0;i<count;i++)if((en[i]??'')||(zh[i]??''))pairs.push('<section class="pair"><div class="en">'+esc(en[i]??'')+'</div><div class="zh">'+esc(zh[i]??'')+'</div></section>');
+ const doc='<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>双层中英排版</title><style>body{margin:0;padding:28px;background:#050505;color:#f4f4f4;font-family:Arial,"Noto Sans SC",sans-serif}.page{max-width:900px;margin:auto}.pair{display:grid;gap:'+gap+'px;padding:15px 0 17px;border-bottom:1px solid #292929;break-inside:avoid}.en,.zh{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.08}.en{font-size:'+enSize+'px;font-weight:500}.zh{font-size:'+zhSize+'px;font-weight:400}</style></head><body><main class="page">'+pairs.join('\n')+'</main></body></html>';
+ const blob=new Blob([doc],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='TwinLine-V2-layout.html';document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+['english','chinese','enSize','zhSize','gapSize'].forEach(id=>$(id).addEventListener('input',update));
+$('example').addEventListener('click',()=>{$('english').value=sampleEn.join('\n');$('chinese').value=sampleZh.join('\n');update();});
+$('download').addEventListener('click',exportHtml);
+update();
 </script>
 </body>
 </html>
