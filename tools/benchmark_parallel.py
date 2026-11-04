@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from tools.sentence_align import align_sentence_embeddings, encode_sentences
+from sentence_align import align_sentence_embeddings, encode_sentences
 
 
 def load_pairs(path: Path, limit: int = 0) -> list[tuple[str, str]]:
