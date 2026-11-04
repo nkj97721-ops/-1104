@@ -1,122 +1,87 @@
-# Real corpus: OpenSubtitles2024 EN → Simplified Chinese
+# Real corpus: fully automatic EN → Simplified Chinese silver benchmark
 
-## Chosen corpus and rationale
+## Objective
 
-Use the OpenSubtitles2024 multilingual set with the exact language pair
-`en` → `zh_CN`. Do not load `zh_TW`, Cantonese (`yue`), or any other
-Chinese variant into this benchmark.
+Run two cross-lingual sentence embedding models against automatically generated
+reference alignments. No human annotation or adjudication is required.
 
-Upstream resources:
+The benchmark measures agreement with upstream alignment metadata. It does
+**not** claim to measure verified semantic truth. Reports must retain the
+silver-reference label and must not be called final semantic accuracy.
 
-- Dataset repository and extraction notes:
-  https://github.com/Helsinki-NLP/OpenSubtitles-devtest
-- Multilingual testset linksets:
-  https://github.com/Helsinki-NLP/OpenSubtitles-devtest/tree/master/devtest-xml/multi-linksets-0.9/2024
-- Upstream paper: Tiedemann & Luo (2026), OpenSubtitles2024, LREC 2026,
-  https://doi.org/10.63317/4ivg578ub2ob
+## Sources
 
-The upstream project describes the multilingual package as synchronized
-subtitle data for 40 languages and 16 subtitle files. Its XML links are
-automatic subtitle-timing alignments, not human semantic judgments. They are
-therefore useful silver proposals and a source of difficult many-to-many
-examples, but must not be called gold.
+- OpenSubtitles2024: exact pair `en` → `zh_CN`; only English and Simplified
+  Chinese are extracted. Movie-level split keeps complete movie IDs isolated
+  between calibration and held-out test.
+- WMT News Commentary v16: calibration documents.
+- WMT17 EN-ZH: held-out test documents, joined by original document and segment
+  IDs. Sentence boundaries are independently detected on both sides.
 
-The selected archive is pinned by Git blob SHA-1 in
-`tools/prepare_opensubtitles2024_gold.py`. The script verifies the archive
-before reading it and extracts only English and `zh_CN`.
+Traditional Chinese and Cantonese are excluded. The source segment/timing
+relationships are retained as weak silver references.
 
-## Build the review queue
+## Run locally
 
 ```bash
+python -m pip install -r requirements-benchmark.txt
+
 python tools/prepare_opensubtitles2024_gold.py \
-  --output-dir data/opensubtitles2024-review \
+  --output-dir data/opensubtitles2024-silver \
   --max-lines-per-document 80
+
+python tools/prepare_wmt_gold_queue.py \
+  --output-dir data/wmt-silver \
+  --calibration-documents 20 \
+  --max-segments-per-document 40
+
+python tools/benchmark_silver_groups.py \
+  --input data/opensubtitles2024-silver/silver_reference.jsonl \
+  --output reports/opensubtitles2024-silver-comparison.json \
+  --max-documents-per-split 20 --no-cuda
+
+python tools/benchmark_silver_groups.py \
+  --input data/wmt-silver/silver_reference.jsonl \
+  --output reports/wmt17-silver-comparison.json \
+  --max-documents-per-split 20 --no-cuda
 ```
 
-This creates:
+## Report contract
 
-- `source/opensubtitles2024-multiset.zip`: downloaded source archive; do not
-  commit or redistribute it.
-- `annotation_queue.jsonl`: document chunks with independently segmented
-  English and Simplified Chinese text, plus proposed groups from upstream
-  subtitle timing.
-- `manifest.json`: archive identity, movie-level split, counts, and proposed
-  1:1 / 1:2 / 2:1 / 2:2 / larger-group distribution.
+Each run reports:
 
-The split is by complete movie ID, not by neighboring sentence windows. This
-prevents chunks from one movie leaking across calibration and held-out sets.
-The last 25% of sorted movie IDs are assigned to held-out test; the rest are
-calibration. Keep this split frozen after annotation begins.
+- exact-group Precision / Recall / F1;
+- separate 1:1, 1:2, 2:1 and 2:2 group metrics;
+- sentence-link Precision / Recall / F1;
+- document-cluster bootstrap 95% confidence intervals;
+- macro document F1;
+- per-document false-positive and missed-group examples;
+- sampled reference-group counts by split.
 
-## Human adjudication
+Groups larger than 2 sentences on either side are excluded region-by-region,
+not converted into false unmatched labels. Unmatched metrics are marked
+not-estimable when the reference split contains no unmatched examples.
 
-```bash
-python tools/review_gold_queue.py \
-  --input data/opensubtitles2024-review/annotation_queue.jsonl \
-  --output data/gold_alignment_human.jsonl \
-  --annotator "your-reviewer-id"
-```
+Calibration parameters are selected only on calibration documents. Held-out
+test documents are not used for parameter selection. OpenSubtitles splits are
+movie-disjoint; WMT splits are domain/document-disjoint.
 
-For every document, inspect the English and Simplified Chinese text, then:
+## GitHub Actions
 
-- `a`: accept the proposed groups only after checking every link.
-- `e`: enter a corrected JSON array of groups.
-- `r`: manually correct sentence boundaries on either side and enter the
-  corrected groups in one JSON object.
-- `s`: skip the document for later review.
-
-The reviewer must correct segmentation or grouping errors. Any group larger
-than 2 sentences on either side requires manual resegmentation into supported
-groups or explicit unmatched sentences. The reviewer CLI records
-`annotation_status=human_verified`, annotator identity, and review timestamp.
-The final evaluator rejects pending or silver records.
-
-## First empirical model comparison
-
-The GitHub Actions workflow downloads the real corpus, creates the queue, and
-runs MiniLM and LaBSE against the upstream timing links on a movie-disjoint
-calibration/held-out split. That output is explicitly labeled
-`PRELIMINARY_SILVER_EVALUATION_NOT_HUMAN_GOLD`.
-
-This run is useful to:
-- prove that both embedding models run on the actual corpus;
-- measure agreement with the upstream alignment proposals;
-- expose 1:2, 2:1, 2:2 and unmatched cases;
-- identify error examples for human review.
-
-It is not the final accuracy result. Once a sufficiently large, representative
-set has been manually adjudicated, run:
-
-```bash
-python tools/benchmark_gold_groups.py \
-  --input data/gold_alignment_human.jsonl \
-  --output reports/human-gold-model-comparison.json
-```
-
-Parameter tuning uses calibration documents only. The independent test movies
-are evaluated once after the model and parameters have been selected.
+The `Real corpus alignment benchmark` workflow downloads both sources,
+constructs the automatic silver references, runs MiniLM and LaBSE, and uploads
+the manifests and comparison reports as an artifact. No review queue or manual
+approval is part of the workflow.
 
 ## Data handling
 
-The repository stores scripts and schemas only. Keep downloaded subtitle text,
-review queues, and human annotations in local or access-controlled storage.
-Retain upstream attribution and check the source dataset terms before any
-redistribution or commercial use.
+Downloaded subtitle text and reports are retained as workflow artifacts rather
+than committed to the repository. Preserve upstream attribution and check
+source dataset terms before redistribution or commercial use.
 
-## Additional news-domain corpus
+## Optional human-gold research path
 
-For a second domain with professionally translated news references, the
-repository also prepares a WMT review queue:
-
-```bash
-python tools/prepare_wmt_gold_queue.py \
-  --output-dir data/wmt-human-review \
-  --calibration-documents 20 \
-  --max-segments-per-document 40
-```
-
-News Commentary v16 supplies calibration blocks; WMT17 supplies held-out test
-documents. The WMT17 source and reference are joined by their original
-`(docid, segment id)` keys. Each segment is then independently sentence-split
-on both sides. The original segment pairing remains only a silver proposal
-until a reviewer confirms or corrects it.
+The separate `review_gold_queue.py` and `benchmark_gold_groups.py` tools
+remain available for research that explicitly wants manually adjudicated gold.
+They are optional and are not required to build, run, or continue the
+automatic benchmark.
