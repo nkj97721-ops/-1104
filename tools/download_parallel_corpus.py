@@ -99,8 +99,12 @@ def download_pairs(
     source_rows = rows if rows is not None else iter_dataset_rows()
 
     try:
+        stopped_at_limit = False
         with temporary.open("w", encoding="utf-8", newline="\n") as stream:
             for row in source_rows:
+                if limit and counters["written"] >= limit:
+                    stopped_at_limit = True
+                    break
                 counters["seen"] += 1
                 en, zh, reason = normalize_pair(row, converter)
                 if reason:
@@ -127,6 +131,8 @@ def download_pairs(
         "script_policy": "Simplified Chinese only; rows changed by OpenCC t2s are rejected",
         "dialect_policy": "heuristic written-Cantonese marker filter; not a complete dialect classifier",
         "limit": limit,
+        "stopped_at_limit": stopped_at_limit,
+        "scan_complete": not stopped_at_limit,
         **counters,
         "output": str(output),
     }
