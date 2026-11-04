@@ -19,7 +19,7 @@ from tools.semantic_align import align_text_batch
 def align_document(
     english: str,
     chinese: str,
-    sentence_model: str = "bert-base-multilingual-cased",
+    sentence_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     word_model: str = "bert-base-multilingual-cased",
     threshold: float = 0.35,
     no_cuda: bool = False,
