@@ -42,13 +42,10 @@ def tokenize_chinese(text: str) -> list[str]:
 
 def parse_links(link_line: str, probability_line: str, src_len: int, tgt_len: int) -> list[dict[str, Any]]:
     raw_links = link_line.strip().split()
-    # Upstream AWESOME-align writes tensor reprs containing spaces, so split()
-    # would incorrectly turn one probability into several fields.
-    tensor_values = re.findall(r"tensor\\(\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?)", probability_line)
-    raw_probs = tensor_values or (
-        re.findall(r"[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?", probability_line)
-        if probability_line.strip() else []
-    )
+    # Upstream writes tensor reprs containing spaces; extract one scalar per tensor.
+    number = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+    tensor_values = re.findall(r"tensor\(\s*(" + number + r")", probability_line)
+    raw_probs = tensor_values or (re.findall(number, probability_line) if probability_line.strip() else [])
     if raw_probs and len(raw_probs) != len(raw_links):
         raise ValueError("模型输出的对齐链接数与概率数不一致。")
     links = []
@@ -59,14 +56,7 @@ def parse_links(link_line: str, probability_line: str, src_len: int, tgt_len: in
         src_index, tgt_index = map(int, match.groups())
         if src_index >= src_len or tgt_index >= tgt_len:
             raise ValueError(f"模型返回越界索引：{item}")
-        if raw_probs:
-            # Tensor repr may look like tensor(0.83, device='cuda:0').
-            numeric = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", raw_probs[index])
-            if not numeric:
-                raise ValueError(f"无法解析模型对齐概率：{raw_probs[index]}")
-            probability = float(numeric.group())
-        else:
-            probability = 0.0
+        probability = float(raw_probs[index]) if raw_probs else 0.0
         if not math.isfinite(probability):
             raise ValueError("模型返回了无效概率。")
         links.append({
