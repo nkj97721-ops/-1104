@@ -76,9 +76,17 @@ class CorpusFilteringTests(unittest.TestCase):
             {"source": "", "target": ""},
         )
 
-    def test_empty_language_column_fails_closed(self):
-        with self.assertRaisesRegex(ValueError, "field is empty"):
-            CORPUS.parse_parallel_line("English only\t")
+    def test_empty_language_column_is_kept_as_same_row_for_filtering(self):
+        self.assertEqual(
+            CORPUS.parse_parallel_line("English only\t"),
+            {"source": "English only", "target": ""},
+        )
+        self.assertEqual(
+            CORPUS.normalize_pair(
+                CORPUS.parse_parallel_line("English only\t"), FakeOpenCC()
+            )[2],
+            "empty",
+        )
 
 
     def test_limit_stops_stream_after_requested_accepted_pairs(self):
