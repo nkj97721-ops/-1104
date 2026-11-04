@@ -22,6 +22,7 @@ def align_sentence_embeddings(
     threshold: float = 0.35,
     gap_penalty: float = 0.12,
     merge_penalty: float = 0.06,
+    similarity_tables=None,
 ) -> dict:
     """Globally align sentence vectors with a monotonic dynamic program.
 
@@ -66,11 +67,17 @@ def align_sentence_embeddings(
 
             transitions = []
             if i < n and j < m:
-                transitions.append((1, 1, cosine(source_vectors[i], target_vectors[j]), 0.0))
+                score = (float(similarity_tables[0][i][j]) if similarity_tables is not None
+                         else cosine(source_vectors[i], target_vectors[j]))
+                transitions.append((1, 1, score, 0.0))
             if i < n and j + 1 < m:
-                transitions.append((1, 2, cosine(source_vectors[i], mean(target_vectors[j:j + 2])), merge_penalty))
+                score = (float(similarity_tables[1][i][j]) if similarity_tables is not None
+                         else cosine(source_vectors[i], mean(target_vectors[j:j + 2])))
+                transitions.append((1, 2, score, merge_penalty))
             if i + 1 < n and j < m:
-                transitions.append((2, 1, cosine(mean(source_vectors[i:i + 2]), target_vectors[j]), merge_penalty))
+                score = (float(similarity_tables[2][i][j]) if similarity_tables is not None
+                         else cosine(mean(source_vectors[i:i + 2]), target_vectors[j]))
+                transitions.append((2, 1, score, merge_penalty))
 
             for take_source, take_target, similarity, penalty in transitions:
                 if similarity < threshold:
