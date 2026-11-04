@@ -8,12 +8,16 @@ from pathlib import Path
 
 class SpecimenTests(unittest.TestCase):
     def setUp(self):
-        self.html = (Path(__file__).resolve().parents[1] / "specimen" / "index.html").read_text(encoding="utf-8")
+        root = Path(__file__).resolve().parents[1]
+        self.html = (root / "specimen" / "index.html").read_text(encoding="utf-8")
+        self.renderer = (root / "specimen" / "renderer.js").read_text(encoding="utf-8")
 
-    def test_supports_paragraph_pairing_and_responsive_wrap(self):
-        self.assertIn('value="paragraphs"', self.html)
-        self.assertIn(r"raw.split(/\n\s*\n+/)", self.html)
-        self.assertIn("overflow-wrap:anywhere", self.html)
+    def test_uses_synchronized_pair_renderer(self):
+        self.assertIn('src="renderer.js"', self.html)
+        self.assertIn("wrapPair", self.renderer)
+        self.assertIn("splitOneLine", self.renderer)
+        self.assertIn("paragraphBlocks", self.renderer)
+        self.assertIn("new ResizeObserver", self.html)
         self.assertIn("TwinLine-layout.html", self.html)
 
     def test_inline_javascript_syntax(self):
@@ -24,6 +28,16 @@ class SpecimenTests(unittest.TestCase):
         self.assertEqual(len(scripts), 1)
         with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as handle:
             handle.write(scripts[0])
+            handle.flush()
+            result = subprocess.run([node, "--check", handle.name], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_renderer_javascript_syntax(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is unavailable")
+        with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as handle:
+            handle.write(self.renderer)
             handle.flush()
             result = subprocess.run([node, "--check", handle.name], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
