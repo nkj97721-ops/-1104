@@ -224,6 +224,28 @@ def main() -> None:
                                selected_gap_penalty, selected_merge_penalty)
             )
         offset += size
+    # Baseline: selected model with the pre-calibration default DP settings.
+    baseline_rows = []
+    offset = 0
+    for index, block in enumerate(blocks):
+        size = len(block)
+        if index in test_ids:
+            block_vectors = (
+                selected_vectors[offset:offset + size]
+                + selected_vectors[pair_count + offset:pair_count + offset + size]
+            )
+            baseline_rows.append(
+                evaluate_block(block, block_vectors, 0.35, 0.12, 0.06)
+            )
+        offset += size
+    baseline_summary = aggregate(baseline_rows)
+    tuned_summary = aggregate(heldout_rows)
+    improvement = {
+        "precision_delta": round(tuned_summary["precision"] - baseline_summary["precision"], 6),
+        "recall_delta": round(tuned_summary["recall"] - baseline_summary["recall"], 6),
+        "f1_delta": round(tuned_summary["f1"] - baseline_summary["f1"], 6),
+    }
+
     report = {
         "corpus": str(Path(args.input)),
         "corpus_sentence_pairs": len(pairs),
@@ -235,7 +257,9 @@ def main() -> None:
         "selected_threshold": selected_threshold,
         "selected_gap_penalty": selected_gap_penalty,
         "selected_merge_penalty": selected_merge_penalty,
-        "heldout_test": aggregate(heldout_rows),
+        "heldout_baseline_default_parameters": baseline_summary,
+        "heldout_test": tuned_summary,
+        "heldout_improvement_over_baseline": improvement,
         "heldout_block_details": heldout_rows,
         "methodology": (
             "Gold alignment is the original parallel-corpus row pairing. Contiguous blocks "
@@ -253,7 +277,9 @@ def main() -> None:
         "selected_gap_penalty": selected_gap_penalty,
         "selected_merge_penalty": selected_merge_penalty,
         "calibration": {k: selected["best_on_dev"][k] for k in ("precision", "recall", "f1", "errors")},
+        "heldout_baseline": report["heldout_baseline_default_parameters"],
         "heldout_test": report["heldout_test"],
+        "heldout_improvement": report["heldout_improvement_over_baseline"],
         "output": args.output,
     }, ensure_ascii=False, indent=2))
 
