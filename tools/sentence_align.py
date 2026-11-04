@@ -27,6 +27,32 @@ def split_sentences(text: str) -> list[str]:
         if part.strip()
     ]
 
+def build_similarity_tables(source_vectors, target_vectors):
+    """Vectorize all 1:1, 1:2, 2:1 and 2:2 cosine scores once per document."""
+    import numpy as np
+
+    source = np.asarray(source_vectors, dtype=np.float32)
+    target = np.asarray(target_vectors, dtype=np.float32)
+    if source.ndim != 2 or target.ndim != 2 or source.shape[1] != target.shape[1]:
+        raise ValueError("Source and target vectors must be 2D arrays with matching dimensions")
+    source = source / np.maximum(np.linalg.norm(source, axis=1, keepdims=True), 1e-12)
+    target = target / np.maximum(np.linalg.norm(target, axis=1, keepdims=True), 1e-12)
+    source_pairs = (source[:-1] + source[1:]) * 0.5
+    target_pairs = (target[:-1] + target[1:]) * 0.5
+    source_pairs = source_pairs / np.maximum(
+        np.linalg.norm(source_pairs, axis=1, keepdims=True), 1e-12
+    )
+    target_pairs = target_pairs / np.maximum(
+        np.linalg.norm(target_pairs, axis=1, keepdims=True), 1e-12
+    )
+    return (
+        source @ target.T,
+        source @ target_pairs.T,
+        source_pairs @ target.T,
+        source_pairs @ target_pairs.T,
+    )
+
+
 def align_sentence_embeddings(
     source_vectors: Sequence[Sequence[float]],
     target_vectors: Sequence[Sequence[float]],
@@ -70,9 +96,13 @@ def align_sentence_embeddings(
         raise ValueError("Sentence vectors must contain only finite values")
 
     if similarity_tables is not None:
-        if len(similarity_tables) != 3:
-            raise ValueError("Exactly three similarity tables are required")
-        expected_shapes = ((n, m), (n, max(0, m - 1)), (max(0, n - 1), m))
+        if len(similarity_tables) not in (3, 4):
+            raise ValueError("Three or four similarity tables are required")
+        expected_shapes = [
+            (n, m), (n, max(0, m - 1)), (max(0, n - 1), m),
+        ]
+        if len(similarity_tables) == 4:
+            expected_shapes.append((max(0, n - 1), max(0, m - 1)))
         for table, expected in zip(similarity_tables, expected_shapes):
             shape = getattr(table, "shape", None)
             if shape is None:
@@ -120,7 +150,11 @@ def align_sentence_embeddings(
                          else cosine(mean(source_vectors[i:i + 2]), target_vectors[j]))
                 transitions.append((2, 1, score, merge_penalty))
             if i + 1 < n and j + 1 < m:
-                score = cosine(mean(source_vectors[i:i + 2]), mean(target_vectors[j:j + 2]))
+                score = (
+                    float(similarity_tables[3][i][j])
+                    if similarity_tables is not None and len(similarity_tables) == 4
+                    else cosine(mean(source_vectors[i:i + 2]), mean(target_vectors[j:j + 2]))
+                )
                 transitions.append((2, 2, score, 2.0 * merge_penalty))
 
             for take_source, take_target, similarity, penalty in transitions:
