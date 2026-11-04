@@ -143,48 +143,52 @@ python -m unittest discover -s tests -v
 
 
 
-## 真实语料人工金标准与双模型实测（V5）
+## 英文—简体中文真实语料全自动基准（V6）
 
-V4 的 1:1 行配对假设不再作为最终准确率依据。V5 新增两套真实语料来源，并把自动配对严格降级为待人工核验的候选：
+V4 的 1:1 行配对假设不再作为最终准确率依据。V6 改为**全自动银标准评测**，不要求用户或标注员逐条人工审核。
 
-1. **WMT News Commentary v16 + WMT17 EN→ZH**：校准集来自 News Commentary v16；独立测试集来自 WMT17 官方英文源文与中文参考译文，按原始 `(docid, segment id)` 匹配。两侧分别重新切句，不再直接把一个 SGML segment 视为一个句子。
-2. **OpenSubtitles2024 en→zh_CN**：使用英文与简体中文字幕，不引入繁体中文、粤语或 zh_TW。上游字幕时间轴对齐仅作为 silver 候选，不是人工金标准。
+### 数据来源与切分
 
-建立 WMT 人工核验队列：
+1. **OpenSubtitles2024 en→zh_CN**：只提取英文与简体中文；按整部电影划分 calibration/test，避免同一电影跨集合泄漏。上游字幕时间轴链接作为弱银标准。
+2. **WMT News Commentary v16 + WMT17 EN→ZH**：News Commentary 用于参数校准，WMT17 官方测试文档作为独立测试；按原始文档和 segment ID 对齐，分别切分英中句子。原始 segment 对应关系作为弱银标准。
+
+两套来源都只保留英文和简体中文；不引入繁体中文或粤语。自动银标准不是人工语义真值，因此结果只能称为“银标准一致性”，不能冒充真实语义准确率。
+
+### 一键运行
+
+GitHub Actions 会自动下载数据、构建银标准参考组、运行 MiniLM 与 LaBSE、输出对比结果及错配文本：
+
+[查看自动基准工作流](https://github.com/nkj97721-ops/-1104/actions/workflows/real-corpus-benchmark.yml)
+
+本地运行：
 
 ```bash
-python -m pip install opencc-python-reimplemented
+python -m pip install -r requirements-benchmark.txt
+python tools/prepare_opensubtitles2024_gold.py \
+  --output-dir data/opensubtitles2024-silver \
+  --max-lines-per-document 80
 python tools/prepare_wmt_gold_queue.py \
-  --output-dir data/wmt-human-review \
+  --output-dir data/wmt-silver \
   --calibration-documents 20 \
   --max-segments-per-document 40
+python tools/benchmark_silver_groups.py \
+  --input data/opensubtitles2024-silver/silver_reference.jsonl \
+  --output reports/opensubtitles2024-silver-comparison.json \
+  --max-documents-per-split 20 --no-cuda
+python tools/benchmark_silver_groups.py \
+  --input data/wmt-silver/silver_reference.jsonl \
+  --output reports/wmt17-silver-comparison.json \
+  --max-documents-per-split 20 --no-cuda
 ```
 
-建立 OpenSubtitles 人工核验队列：
+### 评测内容
 
-```bash
-python tools/prepare_opensubtitles2024_gold.py \
-  --output-dir data/opensubtitles2024-review \
-  --max-lines-per-document 80
-```
+- 句组精确匹配 Precision / Recall / F1。
+- 单独报告 1:1、1:2、2:1、2:2 四种组型的 Precision / Recall / F1。
+- 句子链接 Precision / Recall / F1。
+- 文档级 bootstrap 95% 置信区间及文档宏平均 F1。
+- 逐文档错配文本、误报组和漏报组。
+- 超过 2 句的复杂组按区域排除，不把它们错误地当作未匹配句。
+- 如果参考数据没有未匹配样本，未匹配指标会标记为“无法估计”，不会再用 0% 伪装成有效结果。
 
-逐篇人工核验，不允许把 silver 候选自动冒充 gold：
-
-```bash
-python tools/review_gold_queue.py \
-  --input data/wmt-human-review/annotation_queue.jsonl \
-  --output data/wmt-human-gold.jsonl \
-  --annotator "reviewer-id"
-```
-
-审核完成后，对最终人工金标准运行双模型评测：
-
-```bash
-python tools/benchmark_gold_groups.py \
-  --input data/wmt-human-gold.jsonl \
-  --output reports/wmt-human-gold-benchmark.json
-```
-
-最终评测支持 1:1、1:2、2:1、2:2 以及未匹配句子；分别报告对齐组 exact-match Precision/Recall/F1、句子链接 Precision/Recall/F1、未匹配句子指标和逐文档错配。评测器强制要求 `annotation_status=human_verified`、`annotator` 和 `reviewed_at`。测试文档不参与模型或 DP 参数选择。
-
-GitHub Actions 会下载语料、生成人工审核队列，并运行 MiniLM 与 LaBSE 对上游 silver 对齐的初步对比。该结果只用于诊断模型，不是人工金标准准确率。只有人工核验完成后，V5 gold benchmark 才能产生可报告的最终准确率。
+旧版人工金标准审核工具仍作为可选研究工具保留，但**不属于自动基准运行链路，也不是项目继续的前置条件**。99.85% 的旧 1:1 分数不再作为项目准确率。
