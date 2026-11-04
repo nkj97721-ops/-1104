@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from sentence_align import align_sentence_embeddings, encode_sentences
+from sentence_align import align_sentence_embeddings, clear_model_cache, encode_sentences
 
 
 def load_pairs(path: Path, limit: int = 0) -> list[tuple[str, str]]:
@@ -246,6 +246,7 @@ def main() -> None:
         # One model load/encoding pass per candidate model.
         all_vectors = encode_sentences(all_texts, model_name, args.no_cuda)
         model_vectors[model_name] = all_vectors
+        clear_model_cache()
         pair_count = len(pairs)
         encoded: dict[int, Any] = {}
         offset = 0
