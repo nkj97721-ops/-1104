@@ -4,7 +4,7 @@
 JSONL record:
 {"id":"doc-001","split":"calibration","source":["...","..."],"target":["...","...","..."],"gold":[{"source":[0],"target":[0,1]},{"source":[1],"target":[2]}]}
 
-Supported gold groups are 1:1, 1:2 and 2:1. Unmatched sentences are
+Supported gold groups are 1:1, 1:2, 2:1 and 2:2. Unmatched sentences are
 inferred from indices not present in any gold group. Indices are zero-based.
 """
 from __future__ import annotations
@@ -46,6 +46,10 @@ def load_documents(path: Path) -> list[dict[str, Any]]:
         split = item.get("split")
         if split not in ("calibration", "test"):
             raise ValueError(f"JSONL line {line_no}: split must be calibration or test")
+        if item.get("annotation_status") != "human_verified":
+            raise ValueError(f"JSONL line {line_no}: only human_verified gold records can be benchmarked")
+        if not str(item.get("annotator", "")).strip() or not str(item.get("reviewed_at", "")).strip():
+            raise ValueError(f"JSONL line {line_no}: annotator and reviewed_at are required for human gold")
         groups = []
         used_s, used_t = set(), set()
         previous_s = previous_t = -1
@@ -53,8 +57,8 @@ def load_documents(path: Path) -> list[dict[str, Any]]:
             si, ti = group.get("source"), group.get("target")
             if not isinstance(si, list) or not isinstance(ti, list) or not si or not ti:
                 raise ValueError(f"{doc_id} gold group {group_no}: source/target indices must be non-empty lists")
-            if len(si) > 2 or len(ti) > 2 or (len(si), len(ti)) not in ((1, 1), (1, 2), (2, 1)):
-                raise ValueError(f"{doc_id} gold group {group_no}: only 1:1, 1:2 and 2:1 are supported")
+            if len(si) > 2 or len(ti) > 2 or (len(si), len(ti)) not in ((1, 1), (1, 2), (2, 1), (2, 2)):
+                raise ValueError(f"{doc_id} gold group {group_no}: only 1:1, 1:2, 2:1 and 2:2 are supported")
             if any(type(x) is not int or x < 0 or x >= len(source) for x in si):
                 raise ValueError(f"{doc_id} gold group {group_no}: source index out of range")
             if any(type(x) is not int or x < 0 or x >= len(target) for x in ti):
@@ -245,7 +249,7 @@ def main() -> None:
     ))
     report = {
         "annotation_format": "document-level explicit sentence groups; zero-based indices",
-        "supported_gold_group_types": ["1:1", "1:2", "2:1"],
+        "supported_gold_group_types": ["1:1", "1:2", "2:1", "2:2"],
         "unmatched_policy": "Any sentence omitted from all gold groups is explicitly treated as unmatched.",
         "selection_rule": "Choose model by calibration group-level exact-match F1, then link-level F1; never select by held-out results.",
         "selected_model_on_calibration": selected["model"],
