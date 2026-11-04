@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from tools.sentence_align import align_sentence_embeddings, encode_sentences, split_sentences
 from tools.semantic_align import align_text_batch
@@ -29,19 +34,22 @@ def align_document(
     zh_vectors = vectors[len(en_sentences):]
     sentence_result = align_sentence_embeddings(en_vectors, zh_vectors, threshold=threshold)
 
+    matched_text_pairs = [
+        (" ".join(en_sentences[index] for index in match["source_indices"]),
+         "".join(zh_sentences[index] for index in match["target_indices"]))
+        for match in sentence_result["matches"]
+    ]
+    # One process/model load for all matched sentence groups.
+    word_results = align_text_batch(matched_text_pairs, word_model, no_cuda=no_cuda)
+
     all_source_tokens: list[str] = []
     all_target_tokens: list[str] = []
     all_links: list[dict[str, Any]] = []
     all_candidates: list[dict[str, Any]] = []
     sentence_pairs = []
 
-    for pair_index, match in enumerate(sentence_result["matches"]):
-        en_indices = match["source_indices"]
-        zh_indices = match["target_indices"]
-        en_text = " ".join(en_sentences[index] for index in en_indices)
-        zh_text = "".join(zh_sentences[index] for index in zh_indices)
-        aligned = align_text(en_text, zh_text, word_model, no_cuda=no_cuda)
-
+    for pair_index, (match, aligned) in enumerate(zip(sentence_result["matches"], word_results)):
+        en_text, zh_text = matched_text_pairs[pair_index]
         source_offset = len(all_source_tokens)
         target_offset = len(all_target_tokens)
         all_source_tokens.extend(aligned["source_tokens"])
@@ -71,7 +79,7 @@ def align_document(
         })
 
     return {
-        "engine": "Multilingual BERT sentence alignment + AWESOME-align word alignment",
+        "engine": "Multilingual BERT sentence alignment + batched AWESOME-align word alignment",
         "sentence_model": sentence_model,
         "word_model": word_model,
         "source_language": "en",
@@ -125,7 +133,9 @@ def main() -> None:
         args.en, args.zh, args.sentence_model, args.word_model,
         args.threshold, args.no_cuda,
     )
-    Path(args.output).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+    Path(args.output).write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
     print(f"已写入：{args.output}")
 
