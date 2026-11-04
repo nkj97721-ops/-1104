@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -26,6 +27,67 @@ def composite_advance_width(english_width, chinese_width, pair_index):
         )
     return width
 
+
+
+def glyph_advance(text, cmap, metrics, scale):
+    return sum(metrics[cmap[ord(char)]][0] * scale
+               for char in text if ord(char) in cmap)
+
+
+def split_text_to_width(text, cmap, metrics, scale, max_width):
+    """Greedy wrap that prefers whitespace and falls back to character boundaries."""
+    if not text:
+        return [""]
+    tokens = re.findall(r"\\S+\\s*|\\s+", text)
+    lines, current = [], ""
+    for token in tokens:
+        pieces = [token]
+        if glyph_advance(token, cmap, metrics, scale) > max_width:
+            pieces = []
+            fragment = ""
+            for char in token:
+                candidate = fragment + char
+                if fragment and glyph_advance(candidate, cmap, metrics, scale) > max_width:
+                    pieces.append(fragment)
+                    fragment = char
+                else:
+                    fragment = candidate
+            if fragment:
+                pieces.append(fragment)
+        for piece in pieces:
+            candidate = current + piece
+            if current and glyph_advance(candidate, cmap, metrics, scale) > max_width:
+                lines.append(current.rstrip())
+                current = piece.lstrip()
+            else:
+                current = candidate
+    if current or not lines:
+        lines.append(current.rstrip())
+    return lines
+
+
+def expand_pairs(pairs, latin_cmap, latin_metrics, cjk_cmap, cjk_metrics, max_width):
+    """Turn long bilingual pairs into ordered, width-safe glyph rows."""
+    expanded = []
+    for pair_index, pair in enumerate(pairs, 1):
+        en_parts = split_text_to_width(pair["en"], latin_cmap, latin_metrics, 0.48, max_width)
+        zh_parts = split_text_to_width(pair["zh"], cjk_cmap, cjk_metrics, 0.48, max_width)
+        count = max(len(en_parts), len(zh_parts))
+        for part_index in range(count):
+            expanded.append({
+                "en": en_parts[part_index] if part_index < len(en_parts) else "",
+                "zh": zh_parts[part_index] if part_index < len(zh_parts) else "",
+                "source_pair": pair_index,
+                "segment": part_index + 1,
+                "segments": count,
+            })
+    if len(expanded) > MAX_PAIRS:
+        raise ValueError(
+            f"Automatic wrapping produced {len(expanded)} glyph rows; "
+            f"the current BMP PUA font supports at most {MAX_PAIRS}. "
+            "Reduce the text or split it into separate font files."
+        )
+    return expanded
 
 
 def validate_pairs(pairs):
@@ -90,8 +152,10 @@ def draw_text(text, glyph_set, cmap, metrics, pen, scale, baseline, missing):
     return x
 
 
-def build(pairs, output, family, encoded_output=None):
+def build(pairs, output, family, encoded_output=None, max_line_units=12000):
     validate_pairs(pairs)
+    if max_line_units < 1024 or max_line_units > 60000:
+        raise ValueError("--max-line-units must be between 1024 and 60000")
     output = Path(output)
     encoded_output = Path(encoded_output) if encoded_output else output.with_suffix(".txt")
 
@@ -107,6 +171,7 @@ def build(pairs, output, family, encoded_output=None):
     missing = set()
     mapping = []
     encoded_chars = []
+    pairs = expand_pairs(pairs, latin_cmap, latin_metrics, cjk_cmap, cjk_metrics, max_line_units)
 
     for index, pair in enumerate(pairs):
         glyph_name = f"pair{index:04d}"
@@ -132,6 +197,9 @@ def build(pairs, output, family, encoded_output=None):
             "character": character,
             "en": pair["en"],
             "zh": pair["zh"],
+            "source_pair": pair["source_pair"],
+            "segment": pair["segment"],
+            "segments": pair["segments"],
         })
 
     if missing:
@@ -202,11 +270,13 @@ def main():
     parser.add_argument("--output", default="dist/TwinLine-V2-Sample.ttf")
     parser.add_argument("--family", default="TwinLine V2 Sample")
     parser.add_argument("--encoded-output", help="Output PUA text file; defaults to output name with .txt")
+    parser.add_argument("--max-line-units", type=int, default=12000,
+                        help="Maximum advance width per automatically wrapped glyph row (default: 12000)")
     args = parser.parse_args()
 
     pairs = json.loads(Path(args.input).read_text(encoding="utf-8"))
     validate_pairs(pairs)
-    build(pairs, args.output, args.family, args.encoded_output)
+    build(pairs, args.output, args.family, args.encoded_output, args.max_line_units)
 
 
 if __name__ == "__main__":
