@@ -28,7 +28,7 @@ class FontStudio:
         outer = ttk.Frame(root, padding=18)
         outer.pack(fill="both", expand=True)
         ttk.Label(outer, text="TwinLine V2 · 双层字体工作台", font=("Arial", 19, "bold")).pack(anchor="w")
-        ttk.Label(outer, text="英文一行对应中文一行。生成时每一对会成为一个真正的 TTF 组合字形。", style="Muted.TLabel").pack(anchor="w", pady=(5, 14))
+        ttk.Label(outer, text="英文一行对应中文一行。超长文本会按字体实际字宽自动拆分，生成多枚有序 TTF 组合字形。", style="Muted.TLabel").pack(anchor="w", pady=(5, 14))
 
         editors = ttk.Frame(outer)
         editors.pack(fill="both", expand=True)
@@ -71,7 +71,7 @@ class FontStudio:
         ok = len(en) == len(zh) and bool(en) and all(a.strip() and b.strip() for a, b in zip(en, zh))
         self.count.configure(text=f"英文 {len(en)} 行 / 中文 {len(zh)} 行")
         if ok:
-            self.status.configure(text=f"配对正常：{len(en)} 组。")
+            self.status.configure(text=f"配对正常：{len(en)} 组；超长行将在生成时自动拆分。")
         else:
             self.status.configure(text="配对未通过：两侧行数必须相同，且每一行都要有内容。")
         if show and not ok:
@@ -119,7 +119,7 @@ class FontStudio:
             encoded_path = str(Path(target).with_suffix(".txt"))
             mapping_path = str(Path(target).with_suffix(".mapping.json"))
             self.status.configure(text=f"生成成功：{target}（{len(pairs)} 组）；配套编码文本：{encoded_path}")
-            messagebox.showinfo("完成", f"已生成三份配套文件：\n\n字体：{target}\n编码文本：{encoded_path}\n映射表：{mapping_path}\n\n共 {len(pairs)} 组。将编码文本应用此字体，即可显示每组英文在上、中文在下。")
+            messagebox.showinfo("完成", f"已生成三份配套文件：\n\n字体：{target}\n编码文本：{encoded_path}\n映射表：{mapping_path}\n\n输入 {len(pairs)} 组。超长行已按字宽自动拆分，编码文本会按顺序调用拆分后的字形。将编码文本应用此字体，即可显示英文在上、中文在下。")
         except Exception as exc:
             self.status.configure(text="生成失败。")
             messagebox.showerror("生成失败", str(exc))
