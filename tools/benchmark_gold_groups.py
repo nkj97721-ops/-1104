@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .sentence_align import align_sentence_embeddings, encode_sentences
+    from .sentence_align import align_sentence_embeddings, clear_model_cache, encode_sentences
 except ImportError:  # Direct execution: python tools/benchmark_gold_groups.py
-    from sentence_align import align_sentence_embeddings, encode_sentences
+    from sentence_align import align_sentence_embeddings, clear_model_cache, encode_sentences
 
 
 def load_documents(path: Path) -> list[dict[str, Any]]:
@@ -203,6 +203,7 @@ def main() -> None:
             x["id"]: encode_sentences(x["source"] + x["target"], model, args.no_cuda)
             for x in docs
         }
+        clear_model_cache()
         candidates = []
         for threshold, gap, merge in itertools.product(thresholds, gaps, merges):
             rows = [
