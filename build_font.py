@@ -42,10 +42,11 @@ def split_text_to_width(text, cmap, metrics, scale, max_width):
     lines, current = [], ""
     for token in tokens:
         pieces = [token]
-        if glyph_advance(token, cmap, metrics, scale) > max_width:
+        core = token.rstrip()
+        if glyph_advance(core, cmap, metrics, scale) > max_width:
             pieces = []
             fragment = ""
-            for char in token:
+            for char in core:
                 candidate = fragment + char
                 if fragment and glyph_advance(candidate, cmap, metrics, scale) > max_width:
                     pieces.append(fragment)
@@ -54,6 +55,9 @@ def split_text_to_width(text, cmap, metrics, scale, max_width):
                     fragment = candidate
             if fragment:
                 pieces.append(fragment)
+            suffix = token[len(core):]
+            if suffix and pieces:
+                pieces[-1] += suffix
         for piece in pieces:
             candidate = current + piece
             if current and glyph_advance(candidate, cmap, metrics, scale) > max_width:
