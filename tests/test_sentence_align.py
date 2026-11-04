@@ -57,6 +57,29 @@ class SentenceAlignmentTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["source_indices"], [0, 1])
         self.assertEqual(result["matches"][0]["target_indices"], [0, 1])
 
+    def test_two_two_penalty_is_independent_from_one_to_two_merge_penalty(self):
+        source = [[1, 0], [0, 1]]
+        target = [[0, 1], [1, 0]]
+        low_penalty = ALIGN.align_sentence_embeddings(
+            source, target, threshold=0.6, gap_penalty=0.01,
+            merge_penalty=0.0, two_two_penalty=0.1,
+        )
+        high_penalty = ALIGN.align_sentence_embeddings(
+            source, target, threshold=0.6, gap_penalty=0.01,
+            merge_penalty=0.0, two_two_penalty=1.0,
+        )
+        self.assertEqual(
+            [(m["source_indices"], m["target_indices"]) for m in low_penalty["matches"]],
+            [([0, 1], [0, 1])],
+        )
+        self.assertEqual(high_penalty["matches"], [])
+
+    def test_rejects_invalid_two_two_penalty(self):
+        with self.assertRaisesRegex(ValueError, "two_two_penalty"):
+            ALIGN.align_sentence_embeddings(
+                [[1, 0], [0, 1]], [[1, 0], [0, 1]], two_two_penalty=-0.1
+            )
+
     def test_vectorized_similarity_tables_cover_all_four_group_shapes(self):
         source = [[1, 0], [0, 1]]
         target = [[1, 1], [1, 1]]
