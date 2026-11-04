@@ -58,10 +58,12 @@ class SentenceAlignmentTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["target_indices"], [0, 1])
 
     def test_two_two_penalty_is_independent_from_one_to_two_merge_penalty(self):
+        # Each 1:1 / 1:2 / 2:1 candidate stays below threshold; only the
+        # pooled 2:2 group is semantically strong. This isolates its penalty.
         source = [[1, 0], [0, 1]]
-        target = [[0, 1], [1, 0]]
+        target = [[0.8, 0.6], [0.6, 0.8]]
         low_penalty = ALIGN.align_sentence_embeddings(
-            source, target, threshold=0.6, gap_penalty=0.01,
+            source, target, threshold=0.9, gap_penalty=0.01,
             merge_penalty=0.0, two_two_penalty=0.1,
         )
         high_penalty = ALIGN.align_sentence_embeddings(
