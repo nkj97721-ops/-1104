@@ -70,20 +70,39 @@
     if (best < 0) return false;
 
     const value = lines[best];
-    const tokens = wordTokens(value);
     let cut = -1;
-    let accumulated = "";
     const target = measure(value) / 2;
     let nearest = Infinity;
-    for (let i = 1; i < tokens.length; i++) {
-      accumulated += tokens[i - 1];
-      const left = accumulated.trimEnd();
-      const right = value.slice(accumulated.length).trimStart();
+
+    // Prefer punctuation/clause boundaries before ordinary word boundaries.
+    const chars = graphemes(value);
+    let offset = 0;
+    for (const char of chars) {
+      offset += char.length;
+      if (!/[,:;，；：、—–]/.test(char) || offset >= value.length) continue;
+      const left = value.slice(0, offset).trimEnd();
+      const right = value.slice(offset).trimStart();
       if (!left || !right) continue;
       const distance = Math.abs(measure(left) - target);
       if (distance < nearest) {
         nearest = distance;
-        cut = accumulated.length;
+        cut = offset;
+      }
+    }
+
+    if (cut < 0) {
+      const tokens = wordTokens(value);
+      let accumulated = "";
+      for (let i = 1; i < tokens.length; i++) {
+        accumulated += tokens[i - 1];
+        const left = accumulated.trimEnd();
+        const right = value.slice(accumulated.length).trimStart();
+        if (!left || !right) continue;
+        const distance = Math.abs(measure(left) - target);
+        if (distance < nearest) {
+          nearest = distance;
+          cut = accumulated.length;
+        }
       }
     }
 
@@ -269,7 +288,7 @@
   }
 
   const api = {
-    wrapText, wrapPair, paragraphBlocks, lineBlocks,
+    wrapText, wrapPair, splitOneLine, paragraphBlocks, lineBlocks,
     splitSentences, preparePairs, render
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
