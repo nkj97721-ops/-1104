@@ -12,7 +12,7 @@ class BenchmarkDataTests(unittest.TestCase):
     def test_load_pairs_deduplicates_exact_pairs(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "pairs.tsv"
-            path.write_text("Hello\\t你好\\nHello\\t你好\\nWorld\\t世界\\n", encoding="utf-8")
+            path.write_text("Hello\t你好\nHello\t你好\nWorld\t世界\n", encoding="utf-8")
             self.assertEqual(
                 BENCHMARK.load_pairs(path),
                 [("Hello", "你好"), ("World", "世界")],
