@@ -57,7 +57,7 @@ class GoldGroupFormatTests(unittest.TestCase):
             path = Path(tmp) / "pending.jsonl"
             test_payload = dict(payload, id="pending-test", split="test")
             path.write_text(
-                json.dumps(payload) + "\\n" + json.dumps(test_payload) + "\\n",
+                json.dumps(payload) + "\n" + json.dumps(test_payload) + "\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "human_verified"):
