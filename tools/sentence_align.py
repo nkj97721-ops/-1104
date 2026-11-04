@@ -44,6 +44,13 @@ def align_sentence_embeddings(
         width = len(vectors[0])
         return [sum(float(v[k]) for v in vectors) / len(vectors) for k in range(width)]
 
+    if not math.isfinite(threshold) or threshold < -1.0 or threshold > 1.0:
+        raise ValueError("threshold must be within [-1, 1]")
+    if not math.isfinite(gap_penalty) or gap_penalty < 0:
+        raise ValueError("gap_penalty must be finite and non-negative")
+    if not math.isfinite(merge_penalty) or merge_penalty < 0:
+        raise ValueError("merge_penalty must be finite and non-negative")
+
     n, m = len(source_vectors), len(target_vectors)
     neg_inf = float("-inf")
     dp = [[neg_inf] * (m + 1) for _ in range(n + 1)]
