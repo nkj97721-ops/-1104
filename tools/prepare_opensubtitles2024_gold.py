@@ -81,13 +81,21 @@ def identify_text_member(name: str) -> tuple[str, str] | None:
     return None
 
 
-def split_aligned_lines(source_lines: list[str], target_lines: list[str]) -> tuple[list[str], list[str], list[dict], list[int], list[int], int]:
+def split_aligned_lines(
+    source_lines: list[str], target_lines: list[str], boundary_ids: list[str] | None = None,
+) -> tuple[list[str], list[str], list[dict], list[int], list[int], int, list[dict], list[dict]]:
     if len(source_lines) != len(target_lines):
         raise ValueError(
             f"Aligned EN/zh_CN files have different line counts: {len(source_lines)} != {len(target_lines)}"
         )
+    if boundary_ids is None:
+        boundary_ids = [f"line-{i:06d}" for i in range(len(source_lines))]
+    if len(boundary_ids) != len(source_lines) or len(set(boundary_ids)) != len(boundary_ids):
+        raise ValueError("boundary_ids must contain one unique ID per aligned line")
     source_sentences: list[str] = []
     target_sentences: list[str] = []
+    source_sentence_origins: list[dict] = []
+    target_sentence_origins: list[dict] = []
     proposed_groups: list[dict] = []
     unmatched_source: list[int] = []
     unmatched_target: list[int] = []
@@ -100,12 +108,23 @@ def split_aligned_lines(source_lines: list[str], target_lines: list[str]) -> tup
         trg_indices = list(range(len(target_sentences), len(target_sentences) + len(trg)))
         source_sentences.extend(src)
         target_sentences.extend(trg)
+        boundary_id = str(boundary_ids[line_index])
+        source_sentence_origins.extend(
+            {"boundary_id": boundary_id, "boundary_index": line_index, "sentence_index": i}
+            for i in range(len(src))
+        )
+        target_sentence_origins.extend(
+            {"boundary_id": boundary_id, "boundary_index": line_index, "sentence_index": i}
+            for i in range(len(trg))
+        )
 
         if src_indices and trg_indices:
             proposed_groups.append({
                 "source": src_indices,
                 "target": trg_indices,
                 "alignment_line": line_index,
+                "source_boundary_ids": [boundary_id],
+                "target_boundary_ids": [boundary_id],
                 "suggested_type": f"{len(src_indices)}:{len(trg_indices)}",
             })
             if len(src_indices) > 2 or len(trg_indices) > 2:
@@ -115,7 +134,8 @@ def split_aligned_lines(source_lines: list[str], target_lines: list[str]) -> tup
         elif trg_indices:
             unmatched_target.extend(trg_indices)
 
-    return source_sentences, target_sentences, proposed_groups, unmatched_source, unmatched_target, oversize
+    return (source_sentences, target_sentences, proposed_groups, unmatched_source,
+            unmatched_target, oversize, source_sentence_origins, target_sentence_origins)
 
 
 def main() -> None:
@@ -194,8 +214,9 @@ def main() -> None:
             lines = len(pair["en"])
             for chunk_no, start in enumerate(range(0, lines, args.max_lines_per_document)):
                 end = min(lines, start + args.max_lines_per_document)
-                source, target, groups, unmatched_s, unmatched_t, oversize = split_aligned_lines(
-                    pair["en"][start:end], pair["zh_CN"][start:end]
+                source, target, groups, unmatched_s, unmatched_t, oversize, source_origins, target_origins = split_aligned_lines(
+                    pair["en"][start:end], pair["zh_CN"][start:end],
+                    boundary_ids=[f"{movie_id}:line:{i}" for i in range(start, end)],
                 )
                 record = {
                     "id": f"opensubtitles2024-{movie_id}-{chunk_no:04d}",
@@ -203,6 +224,9 @@ def main() -> None:
                     "split": split,
                     "source": source,
                     "target": target,
+                    "source_sentence_origins": source_origins,
+                    "target_sentence_origins": target_origins,
+                    "boundary_metadata_status": "preserved_original_aligned_subtitle_line_ids",
                     "proposed_groups": groups,
                     "proposed_unmatched_source": unmatched_s,
                     "proposed_unmatched_target": unmatched_t,
