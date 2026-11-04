@@ -9,14 +9,16 @@
 1. 双层排版编辑器：`specimen/index.html`，按行配对、调整两层字号/间距、行数不一致时告警。
 2. TTF 生成器：`build_font.py`，使用 fontTools 读取 Lato Medium 与 Noto Sans CJK SC 字形轮廓，组合成 TrueType glyf。
 3. PUA 映射：从 U+E000 起为每个文本对分配码位，并输出同名 `.mapping.json`。
-4. 配套编码输出：每组文本分配一个 U+E000 起始的私用区码位，同时输出可直接套用生成字体的 `.txt` 文件与完整映射表。\n5. 自动构建：GitHub Actions 安装字体源与 fontTools，运行输入校验测试，构建 TTF、映射文件和编码文本并上传 artifact。
+4. 配套编码输出：每组文本分配一个 U+E000 起始的私用区码位，同时输出可直接套用生成字体的 `.txt` 文件与完整映射表。
+5. 自动构建：GitHub Actions 安装字体源与 fontTools，运行输入校验测试，构建 TTF、映射文件和编码文本并上传 artifact。
 
 ## 本地验证结果
 
 - 输出格式：TrueType TTF。
 - 样例文本对：4 组。
 - TTF 文件大小：25,588 bytes。
-- cmap：样例私用区映射数量与输入一致。\n- 编码文本：每个配对单元对应一个私用区字符，字符顺序与映射表一致。
+- cmap：样例私用区映射数量与输入一致。
+- 编码文本：每个配对单元对应一个私用区字符，字符顺序与映射表一致。
 - 缺失源字形：0。
 - 所有组合字形垂直边界均处于设计范围内。
 - fontTools 重新解析成功；fontconfig 能识别字体；Pillow 实际渲染预览成功。
