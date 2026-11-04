@@ -17,9 +17,11 @@ from typing import Any
 
 try:
     from .benchmark_gold_groups import aggregate, evaluate_document
+    from .boundary_groups import reconstruct_boundary_groups
     from .sentence_align import build_similarity_tables, clear_model_cache, encode_sentences
 except ImportError:
     from benchmark_gold_groups import aggregate, evaluate_document
+    from boundary_groups import reconstruct_boundary_groups
     from sentence_align import build_similarity_tables, clear_model_cache, encode_sentences
 
 
@@ -92,6 +94,30 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         ]
         item["_gold_unmatched_source"] = sorted(map_s[i] for i in unmatched_s)
         item["_gold_unmatched_target"] = sorted(map_t[j] for j in unmatched_t)
+        if "source_sentence_origins" in item and "target_sentence_origins" in item:
+            projection = reconstruct_boundary_groups(
+                item["source_sentence_origins"], item["target_sentence_origins"]
+            )
+            projected_supported = {
+                (tuple(group["source"]), tuple(group["target"]))
+                for group in projection["groups"]
+                if len(group["source"]) in (1, 2) and len(group["target"]) in (1, 2)
+            }
+            if projected_supported != set(item["_gold_groups"]):
+                raise ValueError(
+                    f"{item['id']}: reconstructed boundary groups do not match "
+                    "the stored automatic reference groups"
+                )
+            if (projection["unmatched_source"] != item["_gold_unmatched_source"]
+                    or projection["unmatched_target"] != item["_gold_unmatched_target"]):
+                raise ValueError(
+                    f"{item['id']}: reconstructed boundary gaps do not match stored gaps"
+                )
+            item["_boundary_groups"] = projection["groups"]
+            item["_boundary_projection_validated"] = True
+        else:
+            item["_boundary_groups"] = []
+            item["_boundary_projection_validated"] = False
         (test if item["split"] == "test" else calibration).append(item)
 
     # Stable round-robin sampling prevents one long subtitle from consuming
@@ -123,6 +149,9 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
     counts["boundary_metadata_documents"] = sum(
         bool(x.get("source_sentence_origins")) and bool(x.get("target_sentence_origins"))
         for x in calibration + test
+    )
+    counts["boundary_projection_validated_documents"] = sum(
+        x.get("_boundary_projection_validated", False) for x in calibration + test
     )
     counts["source_sentence_origins_retained"] = sum(
         len(x.get("source_sentence_origins", [])) for x in calibration + test
