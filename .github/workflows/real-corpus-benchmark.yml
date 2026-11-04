@@ -45,30 +45,30 @@ jobs:
         run: |
           python -m compileall -q tools tests
           python -m unittest discover -s tests -v
-      - name: Download real English and Simplified Chinese corpus and build human-review queue
+      - name: Download English and Simplified Chinese corpus and build automatic silver references
         run: |
           python tools/prepare_opensubtitles2024_gold.py \
-            --output-dir data/opensubtitles2024-review \
+            --output-dir data/opensubtitles2024-silver \
             --max-lines-per-document 80
-      - name: Prepare WMT news calibration and WMT17 held-out human-review queue
+      - name: Prepare WMT news calibration and WMT17 held-out silver references
         run: |
           python tools/prepare_wmt_gold_queue.py \
-            --output-dir data/wmt-human-review \
+            --output-dir data/wmt-silver \
             --calibration-documents 20 \
             --max-segments-per-document 40
-      - name: Run preliminary dual-model silver benchmark on OpenSubtitles
+      - name: Run dual-model automatic silver benchmark on OpenSubtitles
         env:
           TOKENIZERS_PARALLELISM: "false"
         run: |
           python tools/benchmark_silver_groups.py \
-            --input data/opensubtitles2024-review/annotation_queue.jsonl \
+            --input data/opensubtitles2024-review/silver_reference.jsonl \
             --output reports/opensubtitles2024-silver-comparison.json \
             --thresholds 0.30,0.35,0.40 \
             --gap-penalties 0.06,0.12 \
             --merge-penalties 0.02,0.06 \
             --max-documents-per-split 20 \
             --no-cuda
-      - name: Run preliminary dual-model silver benchmark on WMT
+      - name: Run dual-model automatic silver benchmark on WMT
         env:
           TOKENIZERS_PARALLELISM: "false"
         run: |
@@ -80,11 +80,11 @@ jobs:
             --merge-penalties 0.02,0.06 \
             --max-documents-per-split 20 \
             --no-cuda
-      - name: Upload corpus manifest, human review queue and model results
+      - name: Upload silver-reference corpus, manifests and model results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: opensubtitles2024-en-zhcn-alignment-${{ github.run_number }}
+          name: en-zh-automatic-silver-benchmark-${{ github.run_number }}
           path: |
             data/opensubtitles2024-review/manifest.json
             data/opensubtitles2024-review/annotation_queue.jsonl
