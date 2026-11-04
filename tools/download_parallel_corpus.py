@@ -18,7 +18,7 @@ DATASET_ID = "FradSer/OpenSubtitles-en-zh-cn-20m"
 # These are strong written-Cantonese markers, not a general dialect detector.
 # A single marker is enough to exclude a likely Cantonese target from this
 # Mandarin-oriented benchmark; the count is recorded in the manifest.
-CANTONESE_MARKERS = re.compile(r"[嘅咗喺冇唔咩噉嗰喎啱嚟乜]")
+CANTONESE_MARKERS = re.compile(r"[嘅咗喺冇唔咩噉嗰喎啱嚟乜係佢]")
 CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 LATIN = re.compile(r"[A-Za-z]")
 
