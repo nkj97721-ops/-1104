@@ -15,10 +15,10 @@ from typing import Any
 
 try:
     from .benchmark_gold_groups import aggregate, evaluate_document
-    from .sentence_align import clear_model_cache, encode_sentences
+    from .sentence_align import build_similarity_tables, clear_model_cache, encode_sentences
 except ImportError:
     from benchmark_gold_groups import aggregate, evaluate_document
-    from sentence_align import clear_model_cache, encode_sentences
+    from sentence_align import build_similarity_tables, clear_model_cache, encode_sentences
 
 
 def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -139,11 +139,21 @@ def main() -> None:
             )
             for x in docs
         }
+        similarities = {
+            x["id"]: build_similarity_tables(
+                vectors[x["id"]][:len(x["source"])],
+                vectors[x["id"]][len(x["source"]):],
+            )
+            for x in docs
+        }
         clear_model_cache()
         candidates = []
         for threshold, gap, merge in itertools.product(thresholds, gaps, merges):
             rows = [
-                evaluate_document(x, vectors[x["id"]], threshold, gap, merge)
+                evaluate_document(
+                    x, vectors[x["id"]], threshold, gap, merge,
+                    similarities[x["id"]],
+                )
                 for x in dev
             ]
             candidates.append({
@@ -160,6 +170,7 @@ def main() -> None:
             evaluate_document(
                 x, vectors[x["id"]], best["threshold"],
                 best["gap_penalty"], best["merge_penalty"],
+                similarities[x["id"]],
             )
             for x in test
         ]
