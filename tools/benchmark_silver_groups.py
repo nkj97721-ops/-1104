@@ -43,18 +43,37 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         used_s = {i for s, t in item["_gold_groups"] for i in s}
         used_t = {j for s, t in item["_gold_groups"] for j in t}
         item["_gold_unmatched_source"] = sorted(
-            set(range(len(item["source"]))) - used_s - set(item.get("proposed_unmatched_source", []))
-        ) + list(item.get("proposed_unmatched_source", []))
+            (set(range(len(item["source"]))) - used_s)
+            | set(item.get("proposed_unmatched_source", []))
+        )
         item["_gold_unmatched_target"] = sorted(
-            set(range(len(item["target"]))) - used_t - set(item.get("proposed_unmatched_target", []))
-        ) + list(item.get("proposed_unmatched_target", []))
+            (set(range(len(item["target"]))) - used_t)
+            | set(item.get("proposed_unmatched_target", []))
+        )
         (test if item["split"] == "test" else calibration).append(item)
 
-    # Stable document sampling keeps the run bounded and repeatable.
-    calibration.sort(key=lambda x: x["id"])
-    test.sort(key=lambda x: x["id"])
-    calibration = calibration[:max_documents]
-    test = test[:max_documents]
+    # Stable round-robin sampling prevents one long subtitle from consuming
+    # the whole evaluation budget and keeps several movie IDs represented.
+    def balanced_sample(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        by_movie: dict[str, list[dict[str, Any]]] = {}
+        for row in sorted(rows, key=lambda x: x["id"]):
+            by_movie.setdefault(row["movie_id"], []).append(row)
+        selected = []
+        movie_ids = sorted(by_movie)
+        depth = 0
+        while len(selected) < max_documents:
+            added = False
+            for movie_id in movie_ids:
+                if depth < len(by_movie[movie_id]) and len(selected) < max_documents:
+                    selected.append(by_movie[movie_id][depth])
+                    added = True
+            if not added:
+                break
+            depth += 1
+        return selected
+
+    calibration = balanced_sample(calibration)
+    test = balanced_sample(test)
     if not calibration or not test:
         raise ValueError("Need supported candidate documents in both calibration and test movie splits")
     counts["calibration_documents_used"] = len(calibration)
