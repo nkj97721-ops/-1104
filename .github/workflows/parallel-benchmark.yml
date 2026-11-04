@@ -54,7 +54,7 @@ jobs:
         run: |
           mkdir -p reports
           python tools/benchmark_parallel.py \
-            --input data/ted2020-en-zh.tsv \
+            --input data/opensubtitles-en-zh-cn.tsv \
             --models sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE \
             --block-size 20 \
             --thresholds 0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60 \
@@ -69,6 +69,6 @@ jobs:
           name: opensubtitles-zh-cn-parallel-benchmark
           path: |
             reports/
-            data/ted2020-en-zh.tsv
+            data/opensubtitles-en-zh-cn.tsv
           if-no-files-found: warn
           retention-days: 30
