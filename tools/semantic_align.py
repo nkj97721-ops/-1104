@@ -42,7 +42,13 @@ def tokenize_chinese(text: str) -> list[str]:
 
 def parse_links(link_line: str, probability_line: str, src_len: int, tgt_len: int) -> list[dict[str, Any]]:
     raw_links = link_line.strip().split()
-    raw_probs = probability_line.strip().split() if probability_line.strip() else []
+    # Upstream AWESOME-align writes tensor reprs containing spaces, so split()
+    # would incorrectly turn one probability into several fields.
+    tensor_values = re.findall(r"tensor\\(\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?)", probability_line)
+    raw_probs = tensor_values or (
+        re.findall(r"[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?", probability_line)
+        if probability_line.strip() else []
+    )
     if raw_probs and len(raw_probs) != len(raw_links):
         raise ValueError("模型输出的对齐链接数与概率数不一致。")
     links = []
