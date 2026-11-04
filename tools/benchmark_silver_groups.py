@@ -70,6 +70,10 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         map_s = {old: new for new, old in enumerate(keep_s)}
         map_t = {old: new for new, old in enumerate(keep_t)}
         original_source_count, original_target_count = len(item["source"]), len(item["target"])
+        has_source_origins = "source_sentence_origins" in item
+        has_target_origins = "target_sentence_origins" in item
+        if has_source_origins != has_target_origins:
+            raise ValueError(f"{item['id']}: source and target boundary provenance must be supplied together")
         item["source"] = [item["source"][i] for i in keep_s]
         item["target"] = [item["target"][i] for i in keep_t]
         for metadata_key, keep_indices, original_count in (
