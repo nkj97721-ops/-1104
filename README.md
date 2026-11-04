@@ -56,6 +56,8 @@ python build_font.py --input samples/pairs.json --output dist/My-TwinLine.ttf --
 python -m pip install -r tools/requirements-semantic-align.txt
 ```
 
+执行一组英中句子后，会生成 `alignment.json`。打开 `specimen/index.html`，点击“导入模型对齐 JSON”，选择该文件；在候选列表中勾选不重叠、语序一致的短语，再点“应用勾选的短语配对”。编辑器会载入短语模式，仍需人工检查后才能导出。
+
 执行一组英中句子：
 
 ```bash
