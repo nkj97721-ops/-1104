@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""Align complete English/Chinese text blocks locally, then extract phrase pairs."""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+from tools.sentence_align import align_sentence_embeddings, encode_sentences, split_sentences
+from tools.semantic_align import align_text
+
+
+def align_document(
+    english: str,
+    chinese: str,
+    sentence_model: str = "bert-base-multilingual-cased",
+    word_model: str = "bert-base-multilingual-cased",
+    threshold: float = 0.35,
+    no_cuda: bool = False,
+) -> dict[str, Any]:
+    en_sentences = split_sentences(english)
+    zh_sentences = split_sentences(chinese)
+    if not en_sentences or not zh_sentences:
+        raise ValueError("英文和中文都必须至少包含一个完整句子。")
+
+    vectors = encode_sentences(en_sentences + zh_sentences, sentence_model, no_cuda)
+    en_vectors = vectors[:len(en_sentences)]
+    zh_vectors = vectors[len(en_sentences):]
+    sentence_result = align_sentence_embeddings(en_vectors, zh_vectors, threshold=threshold)
+
+    all_source_tokens: list[str] = []
+    all_target_tokens: list[str] = []
+    all_links: list[dict[str, Any]] = []
+    all_candidates: list[dict[str, Any]] = []
+    sentence_pairs = []
+
+    for pair_index, match in enumerate(sentence_result["matches"]):
+        en_indices = match["source_indices"]
+        zh_indices = match["target_indices"]
+        en_text = " ".join(en_sentences[index] for index in en_indices)
+        zh_text = "".join(zh_sentences[index] for index in zh_indices)
+        aligned = align_text(en_text, zh_text, word_model, no_cuda=no_cuda)
+
+        source_offset = len(all_source_tokens)
+        target_offset = len(all_target_tokens)
+        all_source_tokens.extend(aligned["source_tokens"])
+        all_target_tokens.extend(aligned["target_tokens"])
+        for link in aligned["links"]:
+            all_links.append({
+                **link,
+                "source_index": link["source_index"] + source_offset,
+                "target_index": link["target_index"] + target_offset,
+                "sentence_pair": pair_index,
+            })
+        for candidate in aligned["phrase_candidates"]:
+            all_candidates.append({
+                **candidate,
+                "source_span": [candidate["source_span"][0] + source_offset,
+                                candidate["source_span"][1] + source_offset],
+                "target_span": [candidate["target_span"][0] + target_offset,
+                                candidate["target_span"][1] + target_offset],
+                "sentence_pair": pair_index,
+                "sentence_similarity": match["similarity"],
+            })
+        sentence_pairs.append({
+            **match,
+            "english": en_text,
+            "chinese": zh_text,
+            "phrase_candidate_count": len(aligned["phrase_candidates"]),
+        })
+
+    return {
+        "engine": "Multilingual BERT sentence alignment + AWESOME-align word alignment",
+        "sentence_model": sentence_model,
+        "word_model": word_model,
+        "source_language": "en",
+        "target_language": "zh",
+        "source_sentences": en_sentences,
+        "target_sentences": zh_sentences,
+        "sentence_pairs": sentence_pairs,
+        "unmatched_source_sentences": [
+            {"index": index, "text": en_sentences[index]}
+            for index in sentence_result["unmatched_source"]
+        ],
+        "unmatched_target_sentences": [
+            {"index": index, "text": zh_sentences[index]}
+            for index in sentence_result["unmatched_target"]
+        ],
+        "source_tokens": all_source_tokens,
+        "target_tokens": all_target_tokens,
+        "links": all_links,
+        "phrase_candidates": sorted(
+            all_candidates,
+            key=lambda item: (-item["score"], item["source_span"][0], item["target_span"][0]),
+        )[:500],
+        "summary": {
+            "source_sentence_count": len(en_sentences),
+            "target_sentence_count": len(zh_sentences),
+            "matched_sentence_groups": len(sentence_pairs),
+            "unmatched_source_sentence_count": len(sentence_result["unmatched_source"]),
+            "unmatched_target_sentence_count": len(sentence_result["unmatched_target"]),
+            "aligned_link_count": len(all_links),
+            "phrase_candidate_count": len(all_candidates),
+        },
+        "notice": (
+            "句子配对基于多语言句向量余弦相似度和单调动态规划，支持 1:1、1:2、2:1 及未匹配句子；"
+            "当前不支持任意句子重排序。短语由词级对齐链接提取。所有分数均为模型/算法评分，"
+            "不是经过校准的翻译正确概率；请检查未匹配句子和短语候选。"
+        ),
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Local document-level English/Chinese semantic alignment")
+    parser.add_argument("--en", required=True, help="English text block")
+    parser.add_argument("--zh", required=True, help="Chinese text block")
+    parser.add_argument("--output", default="alignment.json")
+    parser.add_argument("--sentence-model", default="bert-base-multilingual-cased")
+    parser.add_argument("--word-model", default="bert-base-multilingual-cased")
+    parser.add_argument("--threshold", type=float, default=0.35)
+    parser.add_argument("--no-cuda", action="store_true")
+    args = parser.parse_args()
+    result = align_document(
+        args.en, args.zh, args.sentence_model, args.word_model,
+        args.threshold, args.no_cuda,
+    )
+    Path(args.output).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+    print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
+    print(f"已写入：{args.output}")
+
+
+if __name__ == "__main__":
+    main()
