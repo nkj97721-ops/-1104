@@ -52,7 +52,7 @@ const { chromium } = require("playwright");
   assert.equal(await page.locator("#preview .pair").count(),0);
   await page.locator("#english").fill("take | a closer look | at the issue");
   await page.locator("#chinese").fill("仔细 | 看一看");
-  await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("句子行数相同"));
+  await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("短语数量不一致"));
   assert.equal(await page.locator("#preview .pair").count(),0);
   await page.locator("#chinese").fill("仔细 | 看一看 | 这个问题");
   await page.locator("#english").fill("The first sentence is here. The second sentence follows!");
