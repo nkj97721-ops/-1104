@@ -39,9 +39,13 @@ def make_blocks(pairs: list[tuple[str, str]], block_size: int) -> list[list[tupl
 
 
 def evaluate_block(block: list[tuple[str, str]], vectors: list[list[float]],
-                   threshold: float) -> dict[str, Any]:
+                   threshold: float, gap_penalty: float = 0.12,
+                   merge_penalty: float = 0.06) -> dict[str, Any]:
     n = len(block)
-    result = align_sentence_embeddings(vectors[:n], vectors[n:], threshold=threshold)
+    result = align_sentence_embeddings(
+        vectors[:n], vectors[n:], threshold=threshold,
+        gap_penalty=gap_penalty, merge_penalty=merge_penalty,
+    )
     counts: Counter[str] = Counter()
     exact = 0
     for match in result["matches"]:
@@ -61,6 +65,34 @@ def evaluate_block(block: list[tuple[str, str]], vectors: list[list[float]],
     counts["missed_source"] = len(result["unmatched_source"])
     counts["missed_target"] = len(result["unmatched_target"])
     predicted = len(result["matches"])
+    examples = []
+    for match in result["matches"]:
+        si, ti = match["source_indices"], match["target_indices"]
+        is_exact = len(si) == 1 and len(ti) == 1 and si[0] == ti[0]
+        if not is_exact and len(examples) < 12:
+            examples.append({
+                "type": ("wrong_1_to_1" if len(si) == 1 and len(ti) == 1
+                         else "merge_1_to_n" if len(si) == 1
+                         else "merge_n_to_1" if len(ti) == 1 else "many_to_many"),
+                "english": [block[k][0] for k in si],
+                "predicted_chinese": [block[k][1] for k in ti],
+                "expected_chinese": [block[k][1] for k in si],
+                "similarity": match["similarity"],
+            })
+    for idx in result["unmatched_source"][:6]:
+        examples.append({
+            "type": "missed_english",
+            "english": [block[idx][0]],
+            "predicted_chinese": [],
+            "expected_chinese": [block[idx][1]],
+        })
+    for idx in result["unmatched_target"][:6]:
+        examples.append({
+            "type": "missed_chinese",
+            "english": [],
+            "predicted_chinese": [block[idx][1]],
+            "expected_chinese": [block[idx][1]],
+        })
     precision = exact / predicted if predicted else 0.0
     recall = exact / n if n else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
@@ -68,6 +100,7 @@ def evaluate_block(block: list[tuple[str, str]], vectors: list[list[float]],
         "sentence_count": n, "exact_pairs": exact,
         "precision": precision, "recall": recall, "f1": f1,
         "errors": dict(counts), "objective_score": result["objective_score"],
+        "examples": examples,
     }
 
 
@@ -99,6 +132,8 @@ def main() -> None:
     ap.add_argument("--block-size", type=int, default=20)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--thresholds", default="0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60")
+    ap.add_argument("--gap-penalties", default="0.06,0.12,0.18,0.24")
+    ap.add_argument("--merge-penalties", default="0.02,0.06,0.10,0.14")
     ap.add_argument("--seed", type=int, default=1104)
     ap.add_argument("--no-cuda", action="store_true")
     args = ap.parse_args()
@@ -138,13 +173,29 @@ def main() -> None:
                 + all_vectors[pair_count + offset:pair_count + offset + size]
             )
             offset += size
+        gap_penalties = sorted({float(x) for x in args.gap_penalties.split(",")})
+        merge_penalties = sorted({float(x) for x in args.merge_penalties.split(",")})
+        if any(x < 0 for x in gap_penalties + merge_penalties):
+            raise ValueError("DP 惩罚参数不能为负数。")
         calibration = []
         for threshold in thresholds:
-            rows = [evaluate_block(blocks[i], encoded[i], threshold) for i in sorted(dev_ids)]
-            calibration.append({"threshold": threshold, **aggregate(rows)})
-        best = max(calibration, key=lambda x: (x["f1"], x["precision"], x["threshold"]))
+            for gap_penalty in gap_penalties:
+                for merge_penalty in merge_penalties:
+                    rows = [
+                        evaluate_block(blocks[i], encoded[i], threshold,
+                                       gap_penalty, merge_penalty)
+                        for i in sorted(dev_ids)
+                    ]
+                    calibration.append({
+                        "threshold": threshold, "gap_penalty": gap_penalty,
+                        "merge_penalty": merge_penalty, **aggregate(rows),
+                    })
+        best = max(calibration, key=lambda x: (
+            x["f1"], x["precision"], x["recall"],
+            x["threshold"], -x["gap_penalty"], -x["merge_penalty"],
+        ))
         model_calibrations.append({
-            "model": model_name, "threshold_results": calibration, "best_on_dev": best,
+            "model": model_name, "parameter_grid": calibration, "best_on_dev": best,
         })
 
     # Select model + threshold on calibration only. Prefer precision on F1 ties.
@@ -155,6 +206,8 @@ def main() -> None:
     )
     selected_model = selected["model"]
     selected_threshold = selected["best_on_dev"]["threshold"]
+    selected_gap_penalty = selected["best_on_dev"]["gap_penalty"]
+    selected_merge_penalty = selected["best_on_dev"]["merge_penalty"]
     selected_vectors = model_vectors[selected_model]
     pair_count = len(pairs)
     heldout_rows = []
@@ -167,7 +220,8 @@ def main() -> None:
                 + selected_vectors[pair_count + offset:pair_count + offset + size]
             )
             heldout_rows.append(
-                evaluate_block(block, block_vectors, selected_threshold)
+                evaluate_block(block, block_vectors, selected_threshold,
+                               selected_gap_penalty, selected_merge_penalty)
             )
         offset += size
     report = {
@@ -179,6 +233,8 @@ def main() -> None:
         "model_calibrations": model_calibrations,
         "selected_model": selected_model,
         "selected_threshold": selected_threshold,
+        "selected_gap_penalty": selected_gap_penalty,
+        "selected_merge_penalty": selected_merge_penalty,
         "heldout_test": aggregate(heldout_rows),
         "heldout_block_details": heldout_rows,
         "methodology": (
@@ -194,6 +250,8 @@ def main() -> None:
     print(json.dumps({
         "selected_model": selected_model,
         "selected_threshold": selected_threshold,
+        "selected_gap_penalty": selected_gap_penalty,
+        "selected_merge_penalty": selected_merge_penalty,
         "calibration": {k: selected["best_on_dev"][k] for k in ("precision", "recall", "f1", "errors")},
         "heldout_test": report["heldout_test"],
         "output": args.output,
