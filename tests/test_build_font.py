@@ -1,6 +1,6 @@
 import unittest
 
-from build_font import MAX_GLYPH_ADVANCE, MAX_PAIRS, PUA_START, composite_advance_width, validate_pairs
+from build_font import (MAX_GLYPH_ADVANCE, MAX_PAIRS, PUA_START, composite_advance_width,\n                        expand_pairs, split_text_to_width, validate_pairs)
 
 
 class ValidatePairsTests(unittest.TestCase):
@@ -33,6 +33,34 @@ class ValidatePairsTests(unittest.TestCase):
     def test_rejects_glyph_that_cannot_fit_true_type_advance_field(self):
         with self.assertRaisesRegex(ValueError, "too wide for a TrueType glyph"):
             composite_advance_width(70000, 1000, 3)
+
+    def test_wraps_english_at_word_boundaries(self):
+        cmap = {ord(c): c for c in "hello world"}
+        metrics = {c: (1000, 0) for c in set(cmap.values())}
+        wrapped = split_text_to_width("hello world", cmap, metrics, 0.48, 2700)
+        self.assertEqual(wrapped, ["hello", "world"])
+
+    def test_wraps_cjk_without_dropping_characters(self):
+        text = "中文自动换行"
+        cmap = {ord(c): c for c in text}
+        metrics = {c: (1000, 0) for c in set(cmap.values())}
+        wrapped = split_text_to_width(text, cmap, metrics, 0.48, 1000)
+        self.assertEqual("".join(wrapped), text)
+        self.assertTrue(all(len(line) <= 2 for line in wrapped))
+
+    def test_expands_pair_and_keeps_source_order(self):
+        en = "abcdefgh"
+        zh = "中文测试文字"
+        en_cmap = {ord(c): c for c in en}
+        zh_cmap = {ord(c): c for c in zh}
+        en_metrics = {c: (1000, 0) for c in set(en_cmap.values())}
+        zh_metrics = {c: (1000, 0) for c in set(zh_cmap.values())}
+        rows = expand_pairs([{"en": en, "zh": zh}], en_cmap, en_metrics,
+                            zh_cmap, zh_metrics, 2000)
+        self.assertGreater(len(rows), 1)
+        self.assertEqual("".join(row["en"] for row in rows), en)
+        self.assertEqual("".join(row["zh"] for row in rows), zh)
+        self.assertTrue(all(row["source_pair"] == 1 for row in rows))
 
     def test_private_use_range_has_expected_capacity(self):
         self.assertEqual(PUA_START, 0xE000)
