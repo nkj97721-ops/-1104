@@ -66,6 +66,7 @@ def build_similarity_tables(vectors: list[list[float]], n: int):
         source @ target.T,
         source @ target_pairs.T,
         source_pairs @ target.T,
+        source_pairs @ target_pairs.T,
     )
 
 
