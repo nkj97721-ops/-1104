@@ -51,7 +51,6 @@ jobs:
             --max-lines-per-document 80
       - name: Run preliminary dual-model silver benchmark
         env:
-          HF_HOME: ${{ github.workspace }}/.hf-cache
           TOKENIZERS_PARALLELISM: "false"
         run: |
           python tools/benchmark_silver_groups.py \
