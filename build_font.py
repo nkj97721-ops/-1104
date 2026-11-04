@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 from fontTools.ttLib import TTFont, TTCollection
@@ -74,7 +75,7 @@ def split_line_in_two(text, cmap, metrics, scale):
     """Split one already-fitting line near its visual midpoint without losing text."""
     if len(text) < 2:
         return None
-    tokens = re.findall(r"\\S+\\s*|\\s+", text)
+    tokens = re.findall(r"\S+\s*|\s+", text)
     boundaries = []
     consumed = ""
     total_width = glyph_advance(text, cmap, metrics, scale)
@@ -281,26 +282,54 @@ def build(pairs, output, family, encoded_output=None, max_line_units=12000):
     font["head"].created = font["head"].modified = 0
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    font.save(output)
     mapping_path = output.with_suffix(".mapping.json")
-    mapping_path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
     encoded_output.parent.mkdir(parents=True, exist_ok=True)
-    encoded_output.write_text("\n".join(encoded_chars) + "\n", encoding="utf-8")
 
-    check = TTFont(output)
-    glyph_set = check.getGlyphSet()
-    bad = []
-    for glyph_name in order[1:]:
-        bounds_pen = BoundsPen(glyph_set)
-        glyph_set[glyph_name].draw(bounds_pen)
-        if bounds_pen.bounds and (bounds_pen.bounds[1] < -30 or bounds_pen.bounds[3] > 2048):
-            bad.append((glyph_name, bounds_pen.bounds))
-    if bad:
-        raise RuntimeError("Vertical overflow: " + repr(bad[:5]))
-    if len(check.getBestCmap()) != len(pairs):
-        raise RuntimeError("cmap count mismatch")
-    if len(encoded_chars) != len(mapping):
-        raise RuntimeError("Encoded text and mapping count mismatch")
+    # Stage every artifact beside its destination; publish only after validation.
+    staged = []
+    try:
+        with tempfile.NamedTemporaryFile(prefix=output.stem + ".", suffix=".tmp.ttf",
+                                         dir=output.parent, delete=False) as handle:
+            staged_font = Path(handle.name)
+        staged.append(staged_font)
+        with tempfile.NamedTemporaryFile(prefix=mapping_path.stem + ".", suffix=".tmp",
+                                         dir=mapping_path.parent, delete=False) as handle:
+            staged_mapping = Path(handle.name)
+        staged.append(staged_mapping)
+        with tempfile.NamedTemporaryFile(prefix=encoded_output.stem + ".", suffix=".tmp",
+                                         dir=encoded_output.parent, delete=False) as handle:
+            staged_encoded = Path(handle.name)
+        staged.append(staged_encoded)
+
+        font.save(staged_font)
+        staged_mapping.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
+        staged_encoded.write_text("\n".join(encoded_chars) + "\n", encoding="utf-8")
+
+        check = TTFont(staged_font)
+        glyph_set = check.getGlyphSet()
+        bad = []
+        for glyph_name in order[1:]:
+            bounds_pen = BoundsPen(glyph_set)
+            glyph_set[glyph_name].draw(bounds_pen)
+            if bounds_pen.bounds and (bounds_pen.bounds[1] < -30 or bounds_pen.bounds[3] > 2048):
+                bad.append((glyph_name, bounds_pen.bounds))
+        if bad:
+            raise RuntimeError("Vertical overflow: " + repr(bad[:5]))
+        if len(check.getBestCmap()) != len(pairs):
+            raise RuntimeError("cmap count mismatch")
+        if len(encoded_chars) != len(mapping):
+            raise RuntimeError("Encoded text and mapping count mismatch")
+        check.close()
+
+        os.replace(staged_font, output)
+        os.replace(staged_mapping, mapping_path)
+        os.replace(staged_encoded, encoded_output)
+    finally:
+        for temporary in staged:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     print(json.dumps({
         "font": str(output),
