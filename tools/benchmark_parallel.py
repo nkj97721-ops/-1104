@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 from collections import Counter
 from pathlib import Path
@@ -173,9 +174,11 @@ def main() -> None:
     if not test_ids:
         raise ValueError("测试集为空；请增加语料或减小 block-size。")
 
+    if args.block_size < 2:
+        raise ValueError("--block-size 必须至少为 2。")
     thresholds = sorted({float(x) for x in args.thresholds.split(",")})
-    if any(not 0.0 <= x <= 1.0 for x in thresholds):
-        raise ValueError("阈值必须位于 0 到 1 之间。")
+    if not thresholds or any(not math.isfinite(x) or not -1.0 <= x <= 1.0 for x in thresholds):
+        raise ValueError("阈值必须是 [-1, 1] 内的有限余弦相似度。")
 
     model_names = [x.strip() for x in args.models.split(",") if x.strip()]
     if not model_names:
@@ -200,8 +203,8 @@ def main() -> None:
             offset += size
         gap_penalties = sorted({float(x) for x in args.gap_penalties.split(",")})
         merge_penalties = sorted({float(x) for x in args.merge_penalties.split(",")})
-        if any(x < 0 for x in gap_penalties + merge_penalties):
-            raise ValueError("DP 惩罚参数不能为负数。")
+        if any(not math.isfinite(x) or x < 0 for x in gap_penalties + merge_penalties):
+            raise ValueError("DP 惩罚参数必须是非负有限数。")
         # Cache vectorized cosine transition scores once; the parameter grid
         # then performs only lightweight dynamic-programming table lookups.
         similarity_cache = {
