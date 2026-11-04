@@ -25,6 +25,15 @@ assert.deepEqual(phraseLines("take | a closer look\\nat | the issue"), [
   { line: 1, parts: ["take", "a closer look"] },
   { line: 2, parts: ["at", "the issue"] }
 ]);
+assert.deepEqual(phraseLines("take | a closer look\\r\\nat | the issue"), [
+  { line: 1, parts: ["take", "a closer look"] },
+  { line: 2, parts: ["at", "the issue"] }
+]);
+assert.deepEqual(phraseLines("one | two\\n\\nthree"), [
+  { line: 1, parts: ["one", "two"] },
+  { line: 2, parts: [""] },
+  { line: 3, parts: ["three"] }
+]);
 const phrasePairs = preparePairs(
   "take | a closer look | at the issue",
   "仔细 | 看一看 | 这个问题",
@@ -45,6 +54,12 @@ assert.match(phraseMismatch.errors[0], /短语数量不一致/);
 const phraseLineMismatch = preparePairs("one | two\\nthree", "一 | 二", "phrases");
 assert.equal(phraseLineMismatch.pairs.length, 0);
 assert.match(phraseLineMismatch.errors[0], /句子行数相同/);
+const phraseBlankLine = preparePairs("one | two\\n\\nthree", "一 | 二\\n\\n三", "phrases");
+assert.equal(phraseBlankLine.pairs.length, 0);
+assert.ok(phraseBlankLine.errors.some(message => /短语为空/.test(message)));
+const phraseTrailingDelimiter = preparePairs("one |", "一 | 二", "phrases");
+assert.equal(phraseTrailingDelimiter.pairs.length, 0);
+assert.ok(phraseTrailingDelimiter.errors.some(message => /短语为空/.test(message)));
 
 const sentenceEn = "The first sentence is here. The second sentence follows!";
 const sentenceZh = "第一句话在这里。第二句话紧随其后！";
