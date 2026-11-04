@@ -163,7 +163,7 @@ def main() -> None:
     movie_ids = sorted(complete)
     test_count = max(1, round(len(movie_ids) * 0.25))
     test_movies = set(movie_ids[-test_count:])
-    queue_path = out_dir / "annotation_queue.jsonl"
+    queue_path = out_dir / "silver_reference.jsonl"
     manifest = {
         "dataset": "OpenSubtitles2024 multilingual multiset, alignment threshold 0.9",
         "source_url": SOURCE_URL,
