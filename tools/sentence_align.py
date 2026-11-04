@@ -115,29 +115,21 @@ def align_sentence_embeddings(
 
 def encode_sentences(
     sentences: Sequence[str],
-    model_name: str = "bert-base-multilingual-cased",
+    model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     no_cuda: bool = False,
     batch_size: int = 16,
 ) -> list[list[float]]:
-    """Create local multilingual mean-pooled Transformer embeddings."""
+    """Create local multilingual sentence embeddings trained for semantic similarity."""
     import torch
-    from transformers import AutoModel, AutoTokenizer
+    from sentence_transformers import SentenceTransformer
 
-    device = torch.device("cpu" if no_cuda or not torch.cuda.is_available() else "cuda")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name).to(device)
-    model.eval()
-    vectors: list[list[float]] = []
-    with torch.inference_mode():
-        for start in range(0, len(sentences), batch_size):
-            batch = tokenizer(
-                list(sentences[start:start + batch_size]),
-                padding=True, truncation=True, max_length=128, return_tensors="pt",
-            )
-            batch = {key: value.to(device) for key, value in batch.items()}
-            hidden = model(**batch).last_hidden_state
-            mask = batch["attention_mask"].unsqueeze(-1).to(hidden.dtype)
-            pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
-            pooled = torch.nn.functional.normalize(pooled, p=2, dim=1)
-            vectors.extend(pooled.cpu().tolist())
-    return vectors
+    device = "cpu" if no_cuda or not torch.cuda.is_available() else "cuda"
+    model = SentenceTransformer(model_name, device=device)
+    vectors = model.encode(
+        list(sentences),
+        batch_size=batch_size,
+        show_progress_bar=False,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+    )
+    return vectors.tolist()
