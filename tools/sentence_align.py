@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Sequence
 
-SENTENCE_END = re.compile(r"(?<=[.!?。！？])\\s*")
+SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s*")
 
 
 def split_sentences(text: str) -> list[str]:
