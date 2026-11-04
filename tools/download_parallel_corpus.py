@@ -34,8 +34,8 @@ def parse_parallel_line(line: str) -> dict[str, str]:
         raise ValueError("Malformed parallel TSV record: expected EN<TAB>ZH")
     source, target = line.split("\t", 1)
     source = source.lstrip("\ufeff")
-    if not source.strip() or not target.strip():
-        raise ValueError("Malformed parallel TSV record: English or Chinese field is empty")
+    # Keep the physical record intact. normalize_pair classifies an empty
+    # language side as "empty" and skips only that pair, without shifting rows.
     return {"source": source, "target": target}
 
 
