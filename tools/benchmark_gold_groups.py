@@ -17,7 +17,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from sentence_align import align_sentence_embeddings, encode_sentences
+try:
+    from .sentence_align import align_sentence_embeddings, encode_sentences
+except ImportError:  # Direct execution: python tools/benchmark_gold_groups.py
+    from sentence_align import align_sentence_embeddings, encode_sentences
 
 
 def load_documents(path: Path) -> list[dict[str, Any]]:
