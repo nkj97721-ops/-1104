@@ -1,0 +1,71 @@
+name: Real corpus alignment benchmark
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/**"
+      - "tests/**"
+      - "docs/gold-alignment-format.md"
+      - ".github/workflows/real-corpus-benchmark.yml"
+      - "requirements-benchmark.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-corpus-alignment-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  real-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-benchmark.txt
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-align-models-v1-${{ runner.os }}-py311
+      - name: Install benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-benchmark.txt
+      - name: Run unit tests
+        run: |
+          python -m compileall -q tools tests
+          python -m unittest discover -s tests -v
+      - name: Download real English and Simplified Chinese corpus and build human-review queue
+        run: |
+          python tools/prepare_opensubtitles2024_gold.py \
+            --output-dir data/opensubtitles2024-review \
+            --max-lines-per-document 80
+      - name: Run preliminary dual-model silver benchmark
+        env:
+          HF_HOME: ${{ github.workspace }}/.hf-cache
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          python tools/benchmark_silver_groups.py \
+            --input data/opensubtitles2024-review/annotation_queue.jsonl \
+            --output reports/opensubtitles2024-silver-comparison.json \
+            --max-documents-per-split 30 \
+            --no-cuda
+      - name: Upload corpus manifest, human review queue and model results
+        uses: actions/upload-artifact@v4
+        with:
+          name: opensubtitles2024-en-zhcn-alignment-${{ github.run_number }}
+          path: |
+            data/opensubtitles2024-review/manifest.json
+            data/opensubtitles2024-review/annotation_queue.jsonl
+            reports/opensubtitles2024-silver-comparison.json
+          if-no-files-found: error
+          retention-days: 30
