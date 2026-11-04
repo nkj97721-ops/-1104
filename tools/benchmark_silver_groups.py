@@ -9,8 +9,10 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import random
 from pathlib import Path
 from collections import Counter
+from statistics import mean
 from typing import Any
 
 try:
@@ -33,8 +35,8 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
             continue
         item = json.loads(line)
         counts["input_documents"] += 1
-        if item.get("annotation_status") != "pending_human_review":
-            raise ValueError(f"{item.get('id')}: expected pending_human_review queue record")
+        if item.get("reference_status") != "automatic_silver_reference":
+            raise ValueError(f"{item.get('id')}: expected automatic_silver_reference record")
         groups = item.get("proposed_groups", [])
         if not groups:
             counts["excluded_empty"] += 1
@@ -67,6 +69,7 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         map_t = {old: new for new, old in enumerate(keep_t)}
         item["source"] = [item["source"][i] for i in keep_s]
         item["target"] = [item["target"][i] for i in keep_t]
+        item["_silver_groups_original"] = supported
         item["_gold_groups"] = [
             (tuple(map_s[i] for i in g["source"]),
              tuple(map_t[j] for j in g["target"]))
@@ -102,8 +105,46 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         raise ValueError("Need supported candidate documents in both calibration and test movie splits")
     counts["calibration_documents_used"] = len(calibration)
     counts["test_documents_used"] = len(test)
-    counts["supported_group_types"] = dict(supported_group_types)
+    sampled_types = {}
+    for split_name, rows in (("calibration", calibration), ("test", test)):
+        split_types = Counter(
+            f'{len(group["source"])}:{len(group["target"])}'
+            for row in rows for group in row["_silver_groups_original"]
+        )
+        sampled_types[split_name] = dict(split_types)
+    counts["sampled_group_types_by_split"] = sampled_types
+    counts["supported_group_types_sampled"] = dict(
+        sum((Counter(values) for values in sampled_types.values()), Counter())
+    )
+    counts["candidate_group_types_all_documents"] = dict(supported_group_types)
     return calibration + test, counts
+
+
+def bootstrap_confidence_intervals(rows: list[dict[str, Any]], samples: int = 2000,
+                                  seed: int = 20261104) -> dict[str, Any]:
+    """Document-cluster bootstrap; keeps every document's groups together."""
+    if len(rows) < 2:
+        return {"status": "INSUFFICIENT_DOCUMENTS", "documents": len(rows)}
+    rng = random.Random(seed)
+    group_scores, link_scores = [], []
+    for _ in range(samples):
+        sample = [rows[rng.randrange(len(rows))] for _ in rows]
+        metrics = aggregate(sample)
+        group_scores.append(metrics["group"]["f1"])
+        link_scores.append(metrics["link"]["f1"])
+    def interval(values: list[float]) -> dict[str, float]:
+        ordered = sorted(values)
+        low = ordered[int(0.025 * (len(ordered) - 1))]
+        high = ordered[int(0.975 * (len(ordered) - 1))]
+        return {"lower_95": low, "upper_95": high}
+    return {
+        "status": "DOCUMENT_CLUSTER_BOOTSTRAP",
+        "samples": samples,
+        "documents": len(rows),
+        "group_f1": interval(group_scores),
+        "link_f1": interval(link_scores),
+        "macro_document_group_f1": mean(row["group"]["f1"] for row in rows),
+    }
 
 
 def main() -> None:
@@ -181,20 +222,23 @@ def main() -> None:
             },
             "calibration_silver": best["calibration_silver"],
             "heldout_silver": aggregate(heldout),
+            "heldout_confidence_intervals_95": bootstrap_confidence_intervals(heldout),
             "heldout_document_errors": heldout,
             "parameter_grid": candidates,
         })
 
     result = {
-        "status": "PRELIMINARY_SILVER_EVALUATION_NOT_HUMAN_GOLD",
-        "reference_type": "OpenSubtitles2024 automatic subtitle-timing alignment links",
+        "status": "AUTOMATIC_SILVER_REFERENCE_EVALUATION_NOT_HUMAN_GOLD",
+        "reference_type": "Upstream automatic segment/subtitle alignment proposals; weak reference, not human-verified semantic gold",
         "languages": {"source": "English", "target": "Simplified Chinese (zh_CN)"},
         "split_unit": "whole movie IDs; no movie appears in both calibration and held-out splits",
         "counts": counts,
         "model_comparisons": reports,
+        "evaluation_policy": "Fully automatic; no human annotation or adjudication is required to run this benchmark.",
         "warning": (
-            "These scores measure agreement with automatic subtitle-timing links, not verified semantic alignment. "
-            "Do not report them as final accuracy. Human adjudication is required before using the gold benchmark."
+            "These scores measure agreement with automatic upstream alignment proposals, not verified semantic alignment. "
+            "They are silver-reference agreement scores, not final semantic accuracy. "
+            "Reference groups with more than two sentences on either side are excluded region-by-region."
         ),
     }
     output_path = Path(args.output)
@@ -209,6 +253,7 @@ def main() -> None:
                 "parameters": x["selected_parameters_on_calibration_only"],
                 "calibration_silver": x["calibration_silver"],
                 "heldout_silver": x["heldout_silver"],
+                "heldout_confidence_intervals_95": x["heldout_confidence_intervals_95"],
             }
             for x in reports
         ],
