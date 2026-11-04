@@ -109,21 +109,21 @@ python tools/align_document.py \
 
 ## 英文—简体中文真实语料准确率基准（V4）
 
-**语料必须是英文 + 简体中文。** 基准使用 OPUS OpenSubtitles v2024 的明确语言对 `en–zh-CN`，通过 Hugging Face Dataset Viewer 的分页 JSON API 逐条读取配对数据（每条记录自身包含 source/target），不加载 PyArrow 或整份 998 MB Parquet 文件，不再分别下载两份超大文本再按行号硬配对。镜像数据集说明其包含简体中文，但也承认存在替代字幕、改写及非平行结构；下载器会过滤空行、非英文源文本、非中文目标文本、OpenCC 可识别的繁体文本，并用常见书面粤语标记做额外启发式过滤。粤语过滤不是完整的方言分类器，不能据此声称零粤语。
+**语料必须是英文 + 简体中文。** 基准使用 WMT News Commentary v16 的明确语言对 `en–zh-CN`，通过 WMT 官方数据源 的分页 JSON API 逐条读取配对数据（每条记录自身包含 source/target），不加载 PyArrow 或整份 998 MB Parquet 文件，不再分别下载两份超大文本再按行号硬配对。镜像数据集说明其包含简体中文，但也承认存在替代字幕、改写及非平行结构；下载器会过滤空行、非英文源文本、非中文目标文本、OpenCC 可识别的繁体文本，并用常见书面粤语标记做额外启发式过滤。粤语过滤不是完整的方言分类器，不能据此声称零粤语。
 
 ```bash
 python -m pip install opencc-python-reimplemented
-python tools/download_parallel_corpus.py --output data/opensubtitles-en-zh-cn.tsv --limit 10000
+python tools/download_parallel_corpus.py --output data/news-commentary-en-zh.tsv --limit 10000
 python tools/benchmark_parallel.py \
-  --input data/opensubtitles-en-zh-cn.tsv \
+  --input data/news-commentary-en-zh.tsv \
   --models sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE \
   --block-size 20 \
   --output reports/opensubtitles-zh-cn-benchmark.json
 ```
 
-基准比较 MiniLM 与 LaBSE 两个句向量模型，并只在校准集上扫描阈值及 DP gap/merge 惩罚参数，再在独立留出块上报告准确率、召回率、F1 和错配案例。OpenSubtitles 是影视字幕语料，口语比例高，且包含字幕切分、漏译、改写和多版本字幕等噪声；因此结果代表该语料上的句子对齐表现，不代表正式书面中文或翻译质量的普遍准确率。
+基准比较 MiniLM 与 LaBSE 两个句向量模型，并只在校准集上扫描阈值及 DP gap/merge 惩罚参数，再在独立留出块上报告准确率、召回率、F1 和错配案例。News Commentary 是影视字幕语料，口语比例高，且包含字幕切分、漏译、改写和多版本字幕等噪声；因此结果代表该语料上的句子对齐表现，不代表正式书面中文或翻译质量的普遍准确率。
 
-**语言验收规则：** 输出语料只保留含拉丁字母的英文源句和含汉字的简体中文目标句；可识别的繁体文本和带强书面粤语标记的句子会被排除。下载器会输出 `.manifest.json`，记录扫描数、保留数和各类过滤数。配对数据来自 [FradSer/OpenSubtitles-en-zh-cn-20m](https://huggingface.co/datasets/FradSer/OpenSubtitles-en-zh-cn-20m)，其数据卡标注来源为 OPUS OpenSubtitles v2024、语言对为 en–zh-CN、许可为 MIT。字幕语料仍有噪声，不能把简体脚本过滤等同于完整的普通话方言识别。
+**语言验收规则：** 输出语料只保留含拉丁字母的英文源句和含汉字的简体中文目标句；可识别的繁体文本和带强书面粤语标记的句子会被排除。下载器会输出 `.manifest.json`，记录扫描数、保留数和各类过滤数。配对数据来自 [WMT News Commentary v16](https://huggingface.co/datasets/WMT News Commentary v16)，其数据卡标注来源为 WMT News Commentary v16、语言对为 en–zh-CN、许可为 MIT。字幕语料仍有噪声，不能把简体脚本过滤等同于完整的普通话方言识别。
 
 
 运行基础回归测试：
