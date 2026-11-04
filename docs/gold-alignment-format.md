@@ -56,9 +56,10 @@ then evaluates the frozen parameters on test documents once. It reports:
 4. Per-document predicted and gold groups for error inspection.
 
 The benchmark does not manufacture annotations from silver subtitle timing
-links or the legacy TSV. Until a representative human-reviewed calibration
-set and independent test set exist, no aggregate score should be described as
-validated real-world accuracy.
+links or the legacy TSV. By default it requires at least 10 human-reviewed
+calibration documents, 10 independent test documents, and 3 distinct
+movie/document IDs in each split. These minimums prevent a tiny convenience
+sample from being reported as a reliable corpus-level score.
 
 ## Real-corpus workflow
 
