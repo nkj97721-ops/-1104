@@ -80,6 +80,7 @@ def align_sentence_embeddings(
     gap_penalty: float = 0.12,
     merge_penalty: float = 0.06,
     similarity_tables=None,
+    two_two_penalty: float | None = None,
 ) -> dict:
     """Globally align sentence vectors with monotonic 1:1, 1:2, 2:1 and 2:2 transitions.
 
@@ -106,6 +107,10 @@ def align_sentence_embeddings(
         raise ValueError("gap_penalty must be finite and non-negative")
     if not math.isfinite(merge_penalty) or merge_penalty < 0:
         raise ValueError("merge_penalty must be finite and non-negative")
+    if two_two_penalty is None:
+        two_two_penalty = 2.0 * merge_penalty
+    if not math.isfinite(two_two_penalty) or two_two_penalty < 0:
+        raise ValueError("two_two_penalty must be finite and non-negative")
 
     n, m = len(source_vectors), len(target_vectors)
     vectors = list(source_vectors) + list(target_vectors)
@@ -175,7 +180,7 @@ def align_sentence_embeddings(
                     if similarity_tables is not None and len(similarity_tables) == 4
                     else cosine(mean(source_vectors[i:i + 2]), mean(target_vectors[j:j + 2]))
                 )
-                transitions.append((2, 2, score, 2.0 * merge_penalty))
+                transitions.append((2, 2, score, two_two_penalty))
 
             for take_source, take_target, similarity, penalty in transitions:
                 if similarity < threshold:
