@@ -230,6 +230,15 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
             {"source": list(si), "target": list(ti)}
             for si, ti in sorted(predicted_groups)
         ],
+        "original_boundary_groups": [
+            {
+                "boundary_id": group.get("boundary_id"),
+                "source": list(group["source"]),
+                "target": list(group["target"]),
+                "type": group.get("type"),
+            }
+            for group in doc.get("_boundary_groups", [])
+        ],
         "gold": [
             {"source": list(si), "target": list(ti)}
             for si, ti in doc["_gold_groups"]
