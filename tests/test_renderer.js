@@ -1,0 +1,17 @@
+const assert = require("node:assert/strict");
+const { wrapText, wrapPair, paragraphBlocks, lineBlocks } = require("../specimen/renderer.js");
+const measure = text => Array.from(text).length * 10;
+const en = "The quick brown fox jumps over the lazy dog.";
+const zh = "敏捷的棕色狐狸跳过了那只懒狗。";
+const rows = wrapPair(en, zh, 70, measure, measure);
+assert.ok(rows.length > 1);
+assert.equal(rows.length, wrapPair(en, zh, 70, measure, measure).length);
+assert.equal(rows.map(row => row.en).join("").replace(/\s/g, ""), en.replace(/\s/g, ""));
+assert.equal(rows.map(row => row.zh).join(""), zh);
+assert.deepEqual(paragraphBlocks("a\nb\n\nc\nd"), ["a b", "c d"]);
+assert.deepEqual(lineBlocks("a\nb"), ["a", "b"]);
+const uneven = wrapPair("A", "非常非常长的一段中文文本", 20, measure, measure);
+assert.ok(uneven.length > 1);
+assert.equal(uneven[0].en, "A");
+assert.equal(uneven.map(row => row.zh).join(""), "非常非常长的一段中文文本");
+console.log("renderer tests passed");
