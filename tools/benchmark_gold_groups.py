@@ -251,13 +251,25 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             bucket = type_sums.setdefault(group_type, Counter())
             for key in ("correct", "predicted", "reference"):
                 bucket[key] += counts[key]
-    group_type_metrics = {
-        group_type: {
-            **prf(counts["correct"], counts["predicted"], counts["reference"]),
-            "counts": dict(counts),
-        }
-        for group_type, counts in sorted(type_sums.items())
-    }
+    group_type_metrics = {}
+    estimable_type_f1 = []
+    for group_type, counts in sorted(type_sums.items()):
+        if counts["reference"] == 0:
+            metrics = {
+                "status": "NOT_ESTIMABLE_NO_REFERENCE_GROUPS",
+                "precision": counts["correct"] / counts["predicted"] if counts["predicted"] else 0.0,
+                "recall": None,
+                "f1": None,
+            }
+        else:
+            metrics = {"status": "ESTIMATED", **prf(
+                counts["correct"], counts["predicted"], counts["reference"]
+            )}
+            estimable_type_f1.append(metrics["f1"])
+        group_type_metrics[group_type] = {**metrics, "counts": dict(counts)}
+    macro_group_type_f1 = (
+        sum(estimable_type_f1) / len(estimable_type_f1) if estimable_type_f1 else None
+    )
     if sums["gold_unmatched"] == 0:
         unmatched_metrics = {
             "status": "NOT_ESTIMABLE_NO_REFERENCE_UNMATCHED",
@@ -272,6 +284,7 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "documents": len(rows),
         "group": prf(sums["exact_groups"], sums["predicted_groups"], sums["gold_groups"]),
         "group_type": group_type_metrics,
+        "macro_group_type_f1": macro_group_type_f1,
         "link": prf(sums["correct_links"], sums["predicted_links"], sums["gold_links"]),
         "unmatched": unmatched_metrics,
         "counts": dict(sums),
