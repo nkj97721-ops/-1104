@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Run a clearly-labeled SILVER benchmark on OpenSubtitles2024 subtitle-timing links.
+"""Run a fully automatic SILVER benchmark on real EN→Simplified Chinese data.
 
-This is useful for a first real-corpus model comparison. It is NOT human-gold
-accuracy. Human evaluation must use benchmark_gold_groups.py after review.
+No human annotation is required. Scores measure agreement with upstream
+automatic alignment references, not verified semantic accuracy.
 """
 from __future__ import annotations
 
