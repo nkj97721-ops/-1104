@@ -10,6 +10,11 @@ from typing import Any
 
 
 def validate_groups(source: list[str], target: list[str], groups: list[dict[str, Any]]) -> None:
+    if (not source or not target or
+            any(not isinstance(x, str) or not x.strip() for x in source + target)):
+        raise ValueError("source and target must contain non-empty sentence strings")
+    if not isinstance(groups, list):
+        raise ValueError("groups must be a JSON array")
     used_s, used_t = set(), set()
     last_s = last_t = -1
     for number, group in enumerate(groups, 1):
@@ -67,11 +72,12 @@ def main() -> None:
                 print(f"  T{i}: {sentence}")
             print("\n自动字幕时间对齐建议（仅供参考，不是金标准）")
             print(json.dumps(item.get("proposed_groups", []), ensure_ascii=False, indent=2))
-            print("\n输入 a=逐条检查后接受建议；e=手工输入修正后的 groups JSON；s=跳过")
+            print("\n输入 a=逐条检查后接受建议；e=只修正 groups；r=重新切分句子并输入 groups；s=跳过")
             choice = input("review> ").strip().lower()
             if choice == "s":
                 skipped += 1
                 continue
+            review_source, review_target = item["source"], item["target"]
             if choice == "a":
                 groups = [
                     {"source": g["source"], "target": g["target"]}
@@ -85,13 +91,26 @@ def main() -> None:
                     print(f"JSON 错误，跳过此文档：{exc}")
                     skipped += 1
                     continue
+            elif choice == "r":
+                raw = input(
+                    '完整 JSON，例如 {"source":["English sentence"],"target":["中文句子一。","中文句子二。"],"groups":[{"source":[0],"target":[0,1]}]}> '
+                ).strip()
+                try:
+                    edited = json.loads(raw)
+                    review_source = edited["source"]
+                    review_target = edited["target"]
+                    groups = edited["groups"]
+                except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                    print(f"JSON 结构错误，跳过此文档：{exc}")
+                    skipped += 1
+                    continue
             else:
                 print("无效选项，跳过。")
                 skipped += 1
                 continue
 
             try:
-                validate_groups(item["source"], item["target"], groups)
+                validate_groups(review_source, review_target, groups)
             except (ValueError, TypeError, KeyError) as exc:
                 print(f"标注未通过结构校验，跳过：{exc}")
                 skipped += 1
@@ -101,8 +120,8 @@ def main() -> None:
                 "id": item["id"],
                 "movie_id": item["movie_id"],
                 "split": item["split"],
-                "source": item["source"],
-                "target": item["target"],
+                "source": review_source,
+                "target": review_target,
                 "gold": groups,
                 "annotation_status": "human_verified",
                 "annotator": args.annotator,
