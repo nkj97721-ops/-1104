@@ -352,6 +352,8 @@ def main() -> None:
     report = {
         "corpus": str(Path(args.input)),
         "corpus_sentence_pairs": len(pairs),
+        "calibration_sentence_pairs": sum(len(blocks[i]) for i in dev_ids),
+        "heldout_sentence_pairs": sum(len(blocks[i]) for i in test_ids),
         "block_size": args.block_size,
         "candidate_models": model_names,
         "test_corpus": str(Path(args.test_input)) if args.test_input else None,
