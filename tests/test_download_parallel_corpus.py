@@ -51,6 +51,28 @@ class CorpusFilteringTests(unittest.TestCase):
             ("Hello world", "你 好 世界", None),
         )
 
+    def test_dataset_page_must_be_complete_and_ordered(self):
+        page = {
+            "rows": [
+                {"row_idx": 20, "row": {"source": "Hello", "target": "你好"}},
+                {"row_idx": 21, "row": {"source": "World", "target": "世界"}},
+            ]
+        }
+        self.assertEqual(
+            list(CORPUS._extract_page_rows(page, 20, 2)),
+            [{"source": "Hello", "target": "你好"}, {"source": "World", "target": "世界"}],
+        )
+        with self.assertRaisesRegex(RuntimeError, "incomplete"):
+            list(CORPUS._extract_page_rows({"rows": page["rows"][:1]}, 20, 2))
+        with self.assertRaisesRegex(RuntimeError, "order mismatch"):
+            list(CORPUS._extract_page_rows({"rows": [page["rows"][1]]}, 20, 1))
+
+    def test_dataset_page_requires_paired_fields(self):
+        with self.assertRaisesRegex(RuntimeError, "source/target"):
+            list(CORPUS._extract_page_rows(
+                {"rows": [{"row_idx": 0, "row": {"source": "Hello"}}]}, 0, 1
+            ))
+
 
 if __name__ == "__main__":
     unittest.main()
