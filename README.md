@@ -1,36 +1,51 @@
 # TwinLine V2 — 双层中英组合字体
 
-**V2 已生成真实 TrueType 字体文件。** 每个字形是一个固定文本对：英文在上、对应中文在下。不是图片，而是可安装、可嵌入文档的 TTF 轮廓字形。
+**V2 是真实 TrueType 字体生成器。** 每个字形是一组固定文本对：英文在上、对应中文在下。不是把预览图伪装成字体。
 
-## 成品与验证
+## 直接使用：可视化字体工作台
 
-- 本轮已本地构建并通过字体解析、PUA 映射数量、字形垂直边界检查。
-- [排版编辑器](specimen/index.html)：编辑英文/中文逐行配对并预览。
-- [字体生成器](build_font.py)：从配对文本生成 TTF 和映射表。
-- [样例文本对](samples/pairs.json)：四组演示数据。
-- [CI 构建记录](https://github.com/nkj97721-ops/-1104/actions)：每次修改生成器或样例都会自动构建字体并上传构建产物。
+新增 `font_studio.py`，不需要手动编辑 JSON：
 
-## 使用方式
+1. 安装 Python 3、Tkinter、fontTools、fontconfig，以及 Lato / Noto Sans CJK 字体。
+2. 启动 `python font_studio.py`。
+3. 左侧粘贴英文，每行一条；右侧粘贴对应中文，每行一条。
+4. 点击“检查配对”，确认两侧行数一致、每行均有内容。
+5. 点击“生成 TTF 字体”，选择保存位置。
 
-这是**文档专用组合字形字体**。样例使用 Unicode 私用区 U+E000 起始码位。普通英文字母不会自动变成翻译后的双层字形；排版程序需把每一对英文/中文替换为映射表中的对应私用区字符，再应用本字体。
+工作台会自动生成临时配对数据、调用字体引擎、检查字形轮廓并输出 TTF 和同名 mapping JSON。临时 JSON 会自动清理，不需要手工创建或修改项目文件。
 
-例：第一组文本对对应 U+E000。把该字符放入文档并应用 TwinLine V2 字体，就会显示一枚上下双层组合字形。
+## 安装依赖
 
-## 自定义生成
-
-编辑 `samples/pairs.json`，每项填写 `en` 与 `zh`，然后执行：
+Ubuntu / Debian：
 
 ```bash
-sudo apt-get install fonts-lato fonts-noto-cjk fontconfig
-python -m pip install fonttools
+sudo apt-get update
+sudo apt-get install -y python3-tk fonts-lato fonts-noto-cjk fontconfig
+python3 -m pip install fonttools
+```
+
+macOS / Windows：安装 Python 3、fontTools、Lato 和 Noto Sans CJK SC；确保 `fc-match` 可用（Windows 可使用 Fontconfig 环境）。
+
+## 命令行方式
+
+```bash
 python build_font.py --input samples/pairs.json --output dist/My-TwinLine.ttf --family "My TwinLine"
 ```
 
-脚本将拉丁与简体中文字形轮廓合成为一个字形，分配 PUA 编码，输出 TTF 与 JSON 映射表，并执行结构及轮廓边界检查。
+输出包括 TTF 与映射表 JSON。映射表将每一对文本关联到 Unicode 私用区码位 U+E000 起始位置。
 
-## 限制
+## 在线排版预览
 
-- 一个组合字形代表一对固定文本；新增配对需重新生成字体与映射。
-- 这是固定版式/文档嵌入方案，不是能自动翻译任意输入的通用系统字体。
-- 复杂脚本 shaping、双向文字与自动换行由上层排版器处理。
-- 派生字体受 Lato 与 Noto CJK 的 SIL Open Font License 约束，随成品附带许可证。
+打开 [specimen/index.html](specimen/index.html)，输入英文与中文逐行配对，调整两层字号和间距，并导出双层排版 HTML。浏览器预览用于校对版式；真正的 TTF 由本地字体引擎生成。
+
+## 技术限制（必须明确）
+
+- 一个组合字形代表一对固定文本；这不是自动翻译器，也不会把任意普通英文自动翻译成中文。
+- 新文本通过工作台输入后生成新的组合字形和映射表。
+- 当前组合字形是固定轮廓，字形内部英文与中文不会像普通文本那样独立换行；长句会横向变宽。
+- 复杂脚本 shaping、双向文字与段落自动换行由上层排版器处理。
+- 派生字体受 Lato 与 Noto CJK 的 SIL Open Font License 约束，发布时需保留许可证。
+
+## 自动构建
+
+GitHub Actions 会在生成器或样例数据变化时构建并验证字体，并上传 TTF 与映射 JSON 构建产物。
