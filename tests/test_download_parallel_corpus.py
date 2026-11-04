@@ -63,11 +63,19 @@ class CorpusFilteringTests(unittest.TestCase):
             {"source": "Hello", "target": "你好" + chr(9) + "附注"},
         )
 
-    def test_malformed_tsv_line_is_rejected_as_empty(self):
+    def test_malformed_nonblank_tsv_line_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "expected EN"):
+            CORPUS.parse_parallel_line("no separator here")
+
+    def test_blank_physical_line_is_ignored(self):
         self.assertEqual(
-            CORPUS.parse_parallel_line("no separator here"),
+            CORPUS.parse_parallel_line("\\n"),
             {"source": "", "target": ""},
         )
+
+    def test_empty_language_column_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "field is empty"):
+            CORPUS.parse_parallel_line("English only\\t")
 
 
 if __name__ == "__main__":
