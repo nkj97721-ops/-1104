@@ -22,12 +22,21 @@ LATIN = re.compile(r"[A-Za-z]")
 
 
 def parse_parallel_line(line: str) -> dict[str, str]:
-    """Parse one source-preserving TSV record; never zip independent files."""
+    """Parse one source-preserving TSV record; never zip independent files.
+
+    Blank physical lines are ignored. Any non-blank record without both
+    language columns is rejected instead of silently shifting later pairs.
+    """
     line = line.rstrip("\r\n")
-    if "\t" not in line:
+    if not line:
         return {"source": "", "target": ""}
+    if "\t" not in line:
+        raise ValueError("Malformed parallel TSV record: expected EN<TAB>ZH")
     source, target = line.split("\t", 1)
-    return {"source": source.lstrip("\ufeff"), "target": target}
+    source = source.lstrip("\ufeff")
+    # Keep the physical record intact. normalize_pair classifies an empty
+    # language side as "empty" and skips only that pair, without shifting rows.
+    return {"source": source, "target": target}
 
 
 def normalize_pair(row: dict[str, Any], traditional_to_simplified) -> tuple[str, str, str | None]:
@@ -58,8 +67,11 @@ def iter_dataset_rows() -> Iterator[dict[str, str]]:
     with urlopen(request, timeout=120) as response:
         with gzip.GzipFile(fileobj=response, mode="rb") as compressed:
             with io.TextIOWrapper(compressed, encoding="utf-8", newline="") as text_stream:
-                for line in text_stream:
-                    yield parse_parallel_line(line)
+                for line_number, line in enumerate(text_stream, 1):
+                    try:
+                        yield parse_parallel_line(line)
+                    except ValueError as exc:
+                        raise ValueError(f"WMT TSV line {line_number}: {exc}") from exc
 
 
 def download_pairs(
@@ -87,8 +99,12 @@ def download_pairs(
     source_rows = rows if rows is not None else iter_dataset_rows()
 
     try:
+        stopped_at_limit = False
         with temporary.open("w", encoding="utf-8", newline="\n") as stream:
             for row in source_rows:
+                if limit and counters["written"] >= limit:
+                    stopped_at_limit = True
+                    break
                 counters["seen"] += 1
                 en, zh, reason = normalize_pair(row, converter)
                 if reason:
@@ -98,6 +114,9 @@ def download_pairs(
                 if not limit or counters["written"] < limit:
                     stream.write(en + "\t" + zh + "\n")
                     counters["written"] += 1
+                    if limit and counters["written"] >= limit:
+                        stopped_at_limit = True
+                        break
 
         if counters["written"] < 100:
             raise RuntimeError(
@@ -115,6 +134,8 @@ def download_pairs(
         "script_policy": "Simplified Chinese only; rows changed by OpenCC t2s are rejected",
         "dialect_policy": "heuristic written-Cantonese marker filter; not a complete dialect classifier",
         "limit": limit,
+        "stopped_at_limit": stopped_at_limit,
+        "scan_complete": not stopped_at_limit,
         **counters,
         "output": str(output),
     }

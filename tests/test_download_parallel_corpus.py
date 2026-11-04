@@ -1,6 +1,9 @@
 import importlib.util
+import tempfile
+import types
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "download_parallel_corpus.py"
 SPEC = importlib.util.spec_from_file_location("twinline_download_corpus", MODULE_PATH)
@@ -63,11 +66,48 @@ class CorpusFilteringTests(unittest.TestCase):
             {"source": "Hello", "target": "你好" + chr(9) + "附注"},
         )
 
-    def test_malformed_tsv_line_is_rejected_as_empty(self):
+    def test_malformed_nonblank_tsv_line_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "expected EN"):
+            CORPUS.parse_parallel_line("no separator here")
+
+    def test_blank_physical_line_is_ignored(self):
         self.assertEqual(
-            CORPUS.parse_parallel_line("no separator here"),
+            CORPUS.parse_parallel_line("\n"),
             {"source": "", "target": ""},
         )
+
+    def test_empty_language_column_is_kept_as_same_row_for_filtering(self):
+        self.assertEqual(
+            CORPUS.parse_parallel_line("English only\t"),
+            {"source": "English only", "target": ""},
+        )
+        self.assertEqual(
+            CORPUS.normalize_pair(
+                CORPUS.parse_parallel_line("English only\t"), FakeOpenCC()
+            )[2],
+            "empty",
+        )
+
+
+    def test_limit_stops_stream_after_requested_accepted_pairs(self):
+        class IdentityOpenCC:
+            def convert(self, text):
+                return text
+
+        def rows():
+            for index in range(100):
+                yield {"source": f"Hello {index}", "target": f"你好{index}"}
+            raise AssertionError("The downloader read beyond --limit")
+
+        fake_opencc = types.SimpleNamespace(OpenCC=lambda _mode: IdentityOpenCC())
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "pairs.tsv"
+            with patch.dict("sys.modules", {"opencc": fake_opencc}):
+                report = CORPUS.download_pairs(output, limit=100, rows=rows())
+            self.assertEqual(report["written"], 100)
+            self.assertEqual(report["seen"], 100)
+            self.assertTrue(report["stopped_at_limit"])
+            self.assertFalse(report["scan_complete"])
 
 
 if __name__ == "__main__":

@@ -74,7 +74,7 @@ def split_line_in_two(text, cmap, metrics, scale):
     """Split one already-fitting line near its visual midpoint without losing text."""
     if len(text) < 2:
         return None
-    tokens = re.findall(r"\\S+\\s*|\\s+", text)
+    tokens = re.findall(r"\S+\s*|\s+", text)
     boundaries = []
     consumed = ""
     total_width = glyph_advance(text, cmap, metrics, scale)
