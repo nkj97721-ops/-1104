@@ -1,44 +1,68 @@
 #!/usr/bin/env python3
-"""Download an English–Simplified-Chinese OPUS OpenSubtitles parallel corpus.
+"""Stream a verified English–Simplified-Chinese OpenSubtitles corpus.
 
-The target language is explicitly zh-CN (Simplified Chinese), never the
-ambiguous zh code used by some corpora. Traditional-only rows are filtered
-with OpenCC before the benchmark is written.
+The Hugging Face mirror is derived from OPUS OpenSubtitles v2024 and exposes
+explicit source/target columns. Streaming avoids loading a multi-gigabyte
+archive into RAM and keeps each translation pair in one dataset row.
 """
 from __future__ import annotations
 
 import argparse
-import urllib.request
-import zipfile
+import json
+import re
 from pathlib import Path
+from typing import Any, Iterable, Iterator
 
-# OPUS uses the ISO-style zh_CN suffix in the downloadable archive name.
-URL = "https://object.pouta.csc.fi/OPUS-OpenSubtitles/v2024/moses/en-zh_CN.txt.zip"
+DATASET_ID = "FradSer/OpenSubtitles-en-zh-cn-20m"
+
+# These are strong written-Cantonese markers, not a general dialect detector.
+# A single marker is enough to exclude a likely Cantonese target from this
+# Mandarin-oriented benchmark; the count is recorded in the manifest.
+CANTONESE_MARKERS = re.compile(r"[嘅咗喺冇唔咩噉嗰喎啱嚟乜]")
+CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+LATIN = re.compile(r"[A-Za-z]")
 
 
-def locate_pair(names: list[str]) -> tuple[str, str]:
-    en_files = [n for n in names if n.lower().endswith(".en")]
-    zh_files = [n for n in names if n.lower().endswith((".zh-cn", ".zh_cn"))]
-    matches = []
-    for en in en_files:
-        stem = en[:-3]
-        for zh in zh_files:
-            if zh.rsplit(".", 1)[0].lower() == stem.lower():
-                matches.append((en, zh))
-    if not matches:
+def normalize_pair(row: dict[str, Any], traditional_to_simplified) -> tuple[str, str, str | None]:
+    """Return normalized (English, Simplified Chinese, rejection reason)."""
+    en = str(row.get("source", "") or "").strip()
+    zh = str(row.get("target", "") or "").strip()
+    if not en or not zh:
+        return "", "", "empty"
+    if not LATIN.search(en):
+        return "", "", "not_english"
+    if not CJK.search(zh):
+        return "", "", "not_chinese"
+    simplified = traditional_to_simplified.convert(zh)
+    if simplified != zh:
+        return "", "", "traditional"
+    if CANTONESE_MARKERS.search(zh):
+        return "", "", "likely_cantonese"
+    # One TSV row is one dataset record: no independent line-wise pairing.
+    en = re.sub(r"\s+", " ", en).replace("\t", " ")
+    zh = re.sub(r"\s+", " ", zh).replace("\t", " ")
+    return en, zh, None
+
+
+def iter_dataset_rows() -> Iterator[dict[str, Any]]:
+    """Yield paired records from the streaming dataset."""
+    try:
+        from datasets import load_dataset
+    except ImportError as exc:
+        raise SystemExit("缺少 datasets 依赖：请执行 pip install 'datasets>=3,<5'") from exc
+
+    dataset = load_dataset(DATASET_ID, split="train", streaming=True)
+    columns = set(getattr(dataset, "column_names", []) or [])
+    if columns and not {"source", "target"}.issubset(columns):
         raise RuntimeError(
-            "压缩包内没有匹配的 .en / .zh-CN（或 .zh_CN）文件；"
-            "拒绝回退到含义不明确的 .zh 数据。"
+            f"语料字段不符合预期：需要 source/target，实际字段为 {sorted(columns)}"
         )
-    return matches[0]
+    yield from dataset
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--output", default="data/opensubtitles-en-zh-cn.tsv")
-    ap.add_argument("--archive", default="data/opensubtitles-en-zh-cn.zip")
-    ap.add_argument("--limit", type=int, default=0)
-    args = ap.parse_args()
+def download_pairs(output: Path, limit: int = 0, rows: Iterable[dict[str, Any]] | None = None) -> dict[str, Any]:
+    if limit < 0:
+        raise ValueError("--limit 不能为负数。")
 
     try:
         from opencc import OpenCC
@@ -46,44 +70,62 @@ def main() -> None:
         raise SystemExit(
             "缺少简繁检测依赖：请执行 pip install opencc-python-reimplemented"
         ) from exc
-    traditional_to_simplified = OpenCC("t2s")
 
-    archive = Path(args.archive)
-    archive.parent.mkdir(parents=True, exist_ok=True)
-    if not archive.exists():
-        print(f"Downloading Simplified Chinese corpus: {URL}")
-        urllib.request.urlretrieve(URL, archive)
-
-    with zipfile.ZipFile(archive) as zf:
-        en_name, zh_name = locate_pair(zf.namelist())
-        english = zf.read(en_name).decode("utf-8-sig").splitlines()
-        chinese = zf.read(zh_name).decode("utf-8-sig").splitlines()
-
-    if len(english) != len(chinese):
-        raise RuntimeError(f"平行文件行数不一致：EN={len(english)}，ZH-CN={len(chinese)}")
-
-    output = Path(args.output)
+    converter = OpenCC("t2s")
+    counters = {
+        "seen": 0, "written": 0, "empty": 0, "not_english": 0,
+        "not_chinese": 0, "traditional": 0, "likely_cantonese": 0,
+    }
     output.parent.mkdir(parents=True, exist_ok=True)
-    count = 0
-    traditional_filtered = 0
-    with output.open("w", encoding="utf-8", newline="\n") as stream:
-        for en, zh in zip(english, chinese):
-            en, zh = en.strip(), zh.strip()
-            if not en or not zh:
-                continue
-            if traditional_to_simplified.convert(zh) != zh:
-                traditional_filtered += 1
-                continue
-            stream.write(en.replace("\t", " ") + "\t" + zh.replace("\t", " ") + "\n")
-            count += 1
-            if args.limit and count >= args.limit:
-                break
+    temporary = output.with_name(output.name + ".partial")
+    source_rows = rows if rows is not None else iter_dataset_rows()
 
-    if count < 100:
-        raise RuntimeError(f"简体中文有效句对只有 {count} 条，无法进行可靠评测。")
-    print(f"Saved {count} English–Simplified-Chinese pairs to {output}")
-    print(f"Filtered rows containing traditional-only characters: {traditional_filtered}")
-    print("Source: OPUS OpenSubtitles v2024, language pair en–zh-CN.")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+            for row in source_rows:
+                counters["seen"] += 1
+                en, zh, reason = normalize_pair(row, converter)
+                if reason:
+                    counters[reason] += 1
+                    continue
+                stream.write(en + "\t" + zh + "\n")
+                counters["written"] += 1
+                if limit and counters["written"] >= limit:
+                    break
+
+        if counters["written"] < 100:
+            raise RuntimeError(
+                f"有效英中简体句对只有 {counters['written']} 条；"
+                "拒绝生成不足以评测的语料。"
+            )
+        temporary.replace(output)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+    manifest = {
+        "dataset": DATASET_ID,
+        "source": "OPUS OpenSubtitles v2024 via Hugging Face dataset mirror",
+        "language_pair": "en-zh-CN",
+        "script_policy": "Simplified Chinese only; rows changed by OpenCC t2s are rejected",
+        "dialect_policy": "heuristic written-Cantonese marker filter; not a complete dialect classifier",
+        **counters,
+        "output": str(output),
+    }
+    output.with_suffix(output.suffix + ".manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return manifest
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", default="data/opensubtitles-en-zh-cn.tsv")
+    parser.add_argument("--limit", type=int, default=0,
+                        help="Maximum accepted pairs; 0 streams the full dataset")
+    args = parser.parse_args()
+    report = download_pairs(Path(args.output), args.limit)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
