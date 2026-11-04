@@ -116,8 +116,10 @@ class FontStudio:
                 self.status.configure(text="生成失败，请查看错误信息。")
                 messagebox.showerror("字体生成失败", detail)
                 return
-            self.status.configure(text=f"生成成功：{target}（{len(pairs)} 组）")
-            messagebox.showinfo("完成", f"TTF 字体已生成：\n{target}\n\n{len(pairs)} 组组合字形。")
+            encoded_path = str(Path(target).with_suffix(".txt"))
+            mapping_path = str(Path(target).with_suffix(".mapping.json"))
+            self.status.configure(text=f"生成成功：{target}（{len(pairs)} 组）；配套编码文本：{encoded_path}")
+            messagebox.showinfo("完成", f"已生成三份配套文件：\n\n字体：{target}\n编码文本：{encoded_path}\n映射表：{mapping_path}\n\n共 {len(pairs)} 组。将编码文本应用此字体，即可显示每组英文在上、中文在下。")
         except Exception as exc:
             self.status.configure(text="生成失败。")
             messagebox.showerror("生成失败", str(exc))
