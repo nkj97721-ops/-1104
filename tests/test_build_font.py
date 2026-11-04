@@ -20,7 +20,7 @@ class ValidatePairsTests(unittest.TestCase):
 
     def test_rejects_embedded_newline(self):
         with self.assertRaises(ValueError):
-            validate_pairs([{"en": "Hello\\nWorld", "zh": "你好"}])
+            validate_pairs([{"en": "Hello\nWorld", "zh": "你好"}])
 
     def test_rejects_too_many_pairs_before_build(self):
         with self.assertRaises(ValueError):
