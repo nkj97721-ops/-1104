@@ -238,3 +238,80 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def align_text_batch(
+    text_pairs: list[tuple[str, str]],
+    model: str = "bert-base-multilingual-cased",
+    extraction: str = "softmax",
+    no_cuda: bool = False,
+) -> list[dict[str, Any]]:
+    """Run multiple sentence pairs in one AWESOME-align process/model load."""
+    if not text_pairs:
+        return []
+    tokenized = [(tokenize_english(en), tokenize_chinese(zh)) for en, zh in text_pairs]
+    for source, target in tokenized:
+        if not source or not target:
+            raise ValueError("每组英文和中文都必须包含可识别的文字。")
+    executable = shutil.which("awesome-align")
+    if not executable:
+        raise RuntimeError(
+            "找不到 awesome-align。请先安装：pip install git+https://github.com/neulab/awesome-align.git"
+        )
+    with tempfile.TemporaryDirectory(prefix="twinline-align-batch-") as temp:
+        root = Path(temp)
+        data_file, links_file, probs_file = root / "input.txt", root / "links.txt", root / "probabilities.txt"
+        data_file.write_text(
+            "".join(" ".join(source) + " ||| " + " ".join(target) + "\n"
+                    for source, target in tokenized),
+            encoding="utf-8",
+        )
+        command = [
+            executable, "--data_file", str(data_file),
+            "--output_file", str(links_file),
+            "--output_prob_file", str(probs_file),
+            "--model_name_or_path", model,
+            "--extraction", extraction,
+            "--batch_size", "8",
+            "--num_workers", "1",
+        ]
+        if no_cuda:
+            command.append("--no_cuda")
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+        if completed.returncode:
+            details = (completed.stderr or completed.stdout).strip()
+            raise RuntimeError("语义对齐模型执行失败：\n" + details[-5000:])
+        link_lines = links_file.read_text(encoding="utf-8").splitlines()
+        prob_lines = probs_file.read_text(encoding="utf-8").splitlines() if probs_file.exists() else []
+        if len(link_lines) != len(tokenized):
+            raise RuntimeError(
+                f"模型返回 {len(link_lines)} 组对齐结果，但输入有 {len(tokenized)} 组。"
+            )
+        if prob_lines and len(prob_lines) != len(tokenized):
+            raise RuntimeError(
+                f"模型返回 {len(prob_lines)} 组概率结果，但输入有 {len(tokenized)} 组。"
+            )
+
+    results = []
+    for index, (source, target) in enumerate(tokenized):
+        links = parse_links(
+            link_lines[index], prob_lines[index] if prob_lines else "",
+            len(source), len(target),
+        )
+        candidates = extract_phrase_candidates(source, target, links)
+        results.append({
+            "source_tokens": source,
+            "target_tokens": target,
+            "links": [
+                {**link, "source": source[link["source_index"]], "target": target[link["target_index"]]}
+                for link in links
+            ],
+            "phrase_candidates": candidates[:100],
+            "summary": {
+                "source_token_count": len(source),
+                "target_token_count": len(target),
+                "aligned_link_count": len(links),
+                "candidate_count": len(candidates),
+            },
+        })
+    return results
