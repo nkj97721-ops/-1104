@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from tools.sentence_align import align_sentence_embeddings, encode_sentences, split_sentences
-from tools.semantic_align import align_text
+from tools.semantic_align import align_text_batch
 
 
 def align_document(
