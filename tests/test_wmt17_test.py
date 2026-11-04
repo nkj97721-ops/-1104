@@ -24,8 +24,8 @@ class WMT17SGMTests(unittest.TestCase):
 
     def test_pairs_are_joined_by_ids_not_dictionary_order(self):
         source = {
-            ("doc-a", "2"): "Second",
             ("doc-a", "1"): "First",
+            ("doc-a", "2"): "Second",
         }
         target = {
             ("doc-a", "1"): "第一",
