@@ -16,7 +16,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import jieba
+try:
+    import jieba
+except ImportError:  # Character fallback keeps basic tokenization usable.
+    jieba = None
 
 TOKEN_RE = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?|\d+(?:[.,]\d+)*|[\u3400-\u9fff]+|[^\w\s]", re.UNICODE)
 
@@ -31,7 +34,7 @@ def tokenize_chinese(text: str) -> list[str]:
     tokens: list[str] = []
     for chunk in TOKEN_RE.findall(text):
         if re.fullmatch(r"[\u3400-\u9fff]+", chunk):
-            tokens.extend(token for token in jieba.cut(chunk, HMM=True) if token.strip())
+            tokens.extend(token for token in (jieba.cut(chunk, HMM=True) if jieba else list(chunk)) if token.strip())
         else:
             tokens.append(chunk)
     return tokens
@@ -50,7 +53,14 @@ def parse_links(link_line: str, probability_line: str, src_len: int, tgt_len: in
         src_index, tgt_index = map(int, match.groups())
         if src_index >= src_len or tgt_index >= tgt_len:
             raise ValueError(f"模型返回越界索引：{item}")
-        probability = float(raw_probs[index]) if raw_probs else 0.0
+        if raw_probs:
+            # Tensor repr may look like tensor(0.83, device='cuda:0').
+            numeric = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", raw_probs[index])
+            if not numeric:
+                raise ValueError(f"无法解析模型对齐概率：{raw_probs[index]}")
+            probability = float(numeric.group())
+        else:
+            probability = 0.0
         if not math.isfinite(probability):
             raise ValueError("模型返回了无效概率。")
         links.append({
