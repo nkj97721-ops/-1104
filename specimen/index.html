@@ -3,98 +3,128 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>双层中英排版器 V2</title>
+<meta name="theme-color" content="#050505">
+<title>TwinLine V2 · 双层中英排版器</title>
 <style>
-:root{color-scheme:dark;--bg:#050505;--panel:#101010;--line:#292929;--fg:#f4f4f4;--muted:#a4a4a4}
+:root{color-scheme:dark;--bg:#050505;--panel:#111;--line:#292929;--fg:#f4f4f4;--muted:#999;--en-size:25px;--zh-size:20px;--gap:2px}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:Arial,"Noto Sans SC",sans-serif;padding:24px 16px 48px}
-main{max-width:980px;margin:auto}
-h1{font-size:22px;letter-spacing:.02em;margin:0 0 7px}
-.note{font-size:13px;line-height:1.6;color:var(--muted);margin-bottom:20px}
-.editor{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-label{display:block;font-size:13px;color:var(--muted)}
-textarea{display:block;width:100%;min-height:170px;margin-top:7px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--fg);font:15px/1.6 ui-monospace,monospace;resize:vertical}
-.controls{display:flex;flex-wrap:wrap;gap:16px 22px;padding:16px 0;align-items:center}
-.control{min-width:145px;display:grid;gap:7px}
+body{margin:0;padding:22px 16px 48px;background:var(--bg);color:var(--fg);font-family:Arial,"Noto Sans CJK SC",sans-serif}
+main{max-width:1000px;margin:auto}
+h1{font-size:22px;margin:0 0 8px}
+.note{font-size:13px;line-height:1.65;color:var(--muted);margin-bottom:18px}
+.editors{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{display:block;color:var(--muted);font-size:13px}
+textarea{display:block;width:100%;min-height:190px;margin-top:7px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--fg);font:14px/1.6 ui-monospace,monospace;resize:vertical}
+.controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:end;padding:16px 0}
+.control{display:grid;gap:7px;min-width:145px}
 .control span{font-size:12px;color:var(--muted)}
+select{background:#171717;color:#fff;border:1px solid #444;border-radius:8px;padding:8px;min-height:36px}
 input[type=range]{width:150px;accent-color:white}
-.actions{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 16px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}
 button{border:1px solid #444;border-radius:9px;background:#171717;color:#fff;padding:10px 14px;font-size:13px}
 button:active{background:#292929}
-.status{min-height:20px;color:#d5b66a;font-size:12px;margin:0 0 8px}
+.status{min-height:22px;color:#d5b66a;font-size:12px;line-height:1.6}
 .preview{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
-.pair{display:grid;gap:var(--gap);padding:15px 0 17px;border-bottom:1px solid #242424;break-inside:avoid;page-break-inside:avoid}
-.en,.zh{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal}
-.en{font-size:var(--en-size);line-height:1.08;font-weight:500;letter-spacing:.005em}
-.zh{font-size:var(--zh-size);line-height:1.08;font-weight:400;letter-spacing:.015em}
-.empty{color:#777;padding:28px 0;font-size:14px}
-@media(max-width:620px){.editor{grid-template-columns:1fr}.controls{gap:12px}.control{min-width:calc(50% - 12px)}}
+.pair{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--gap);padding:15px 0 17px;border-bottom:1px solid #242424;break-inside:avoid;page-break-inside:avoid}
+.en,.zh{margin:0;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;line-height:1.12}
+.en{font-size:var(--en-size);font-weight:500;letter-spacing:.005em}
+.zh{font-size:var(--zh-size);font-weight:400;letter-spacing:.015em}
+.empty{padding:28px 0;color:#777}
+.footer{margin-top:20px;color:#888;font-size:12px;line-height:1.65}
+@media(max-width:650px){.editors{grid-template-columns:1fr}.controls{gap:12px}.control{min-width:calc(50% - 12px)}}
+@media print{body{background:#fff;color:#111;padding:0}.pair{border-color:#ddd}.en,.zh{color:#111}.footer,.editors,.controls,.actions,.status,h1,.note{display:none}}
 </style>
 </head>
 <body>
 <main>
-<h1>双层中英排版器 V2</h1>
-<div class="note">逐行配对：上面英文，下面中文。每一对锁定为一个排版单元，页面不会擅自翻译或错配。这里验证的是双层排版机制，不把排版器冒充成系统字体。</div>
-<div class="editor">
-<label>英文（每行一条）
+<h1>TwinLine V2 · 双层中英排版器</h1>
+<div class="note">直接粘贴普通英文和中文。选择按行配对，或按段落配对；每个配对单元保持在一起，两层文字会根据可用宽度自动换行。这里是可直接使用的排版器，不要求手动输入 PUA 私用区字符。</div>
+<div class="editors">
+<label>英文
 <textarea id="english" spellcheck="false">The quick brown fox jumps over the lazy dog.
 Typography is the art of arranging type.
-One thought, two languages, one visual unit.
-Precision comes from proportion and spacing.</textarea>
+One thought, two languages, one visual unit.</textarea>
 </label>
-<label>中文（行数、顺序与英文对应）
+<label>中文
 <textarea id="chinese" spellcheck="false">敏捷的棕色狐狸跳过了那只懒狗。
 字体排印是安排文字的艺术。
-一种思想，两种语言，一个视觉整体。
-精确感来自比例与间距。</textarea>
+一种思想，两种语言，一个视觉整体。</textarea>
 </label>
 </div>
 <div class="controls">
-<label class="control"><span>英文大小：<b id="enValue">25 px</b></span><input id="enSize" type="range" min="14" max="42" value="25"></label>
-<label class="control"><span>中文大小：<b id="zhValue">20 px</b></span><input id="zhSize" type="range" min="12" max="36" value="20"></label>
-<label class="control"><span>两层间距：<b id="gapValue">2 px</b></span><input id="gapSize" type="range" min="0" max="12" value="2"></label>
+<label class="control"><span>配对方式</span><select id="mode"><option value="lines">逐行配对</option><option value="paragraphs">按段落配对（空行分段）</option></select></label>
+<label class="control"><span>英文大小：<b id="enValue">25 px</b></span><input id="enSize" type="range" min="12" max="44" value="25"></label>
+<label class="control"><span>中文大小：<b id="zhValue">20 px</b></span><input id="zhSize" type="range" min="12" max="40" value="20"></label>
+<label class="control"><span>两层间距：<b id="gapValue">2 px</b></span><input id="gapSize" type="range" min="0" max="16" value="2"></label>
 </div>
 <div class="actions">
 <button id="example" type="button">恢复示例</button>
-<button id="download" type="button">导出双层排版 HTML</button>\n<button id="downloadJson" type="button">导出字体配对 JSON</button>
+<button id="downloadHtml" type="button">导出可直接使用的 HTML</button>
+<button id="downloadJson" type="button">导出 TTF 配对数据</button>
+<button id="print" type="button">打印 / 保存 PDF</button>
 </div>
 <div class="status" id="status" role="status" aria-live="polite"></div>
-<section class="preview" id="preview" aria-label="双层排版预览"></section>
+<section class="preview" id="preview" aria-label="双层中英排版预览"></section>
+<div class="footer">说明：普通 TTF 字体不能读取任意两段文本并自行合成双层字形。此排版器通过浏览器排版引擎直接处理普通文本；若必须输出独立 TTF 文件，则需把配对内容编译成字形并使用对应编码。两种输出用途不同，不会互相冒充。</div>
 </main>
 <script>
 const $=id=>document.getElementById(id);
-const sampleEn=['The quick brown fox jumps over the lazy dog.','Typography is the art of arranging type.','One thought, two languages, one visual unit.','Precision comes from proportion and spacing.'];
-const sampleZh=['敏捷的棕色狐狸跳过了那只懒狗。','字体排印是安排文字的艺术。','一种思想，两种语言，一个视觉整体。','精确感来自比例与间距。'];
-const esc=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function lines(id){return $(id).value.replace(/\r/g,'').split('\n');}
+const sampleEn="The quick brown fox jumps over the lazy dog.\nTypography is the art of arranging type.\nOne thought, two languages, one visual unit.";
+const sampleZh="敏捷的棕色狐狸跳过了那只懒狗。\n字体排印是安排文字的艺术。\n一种思想，两种语言，一个视觉整体。";
+function blocks(id){
+ const raw=$(id).value.replace(/\r/g,"").trim();
+ if(!raw)return [];
+ if($("mode").value==="paragraphs")return raw.split(/\n\s*\n+/).map(x=>x.replace(/\n+/g," ").trim()).filter(Boolean);
+ return raw.split("\n");
+}
+function pairs(){
+ const en=blocks("english"),zh=blocks("chinese");
+ return {en,zh,items:Array.from({length:Math.max(en.length,zh.length)},(_,i)=>({en:en[i]||"",zh:zh[i]||""}))};
+}
+function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function update(){
- const en=lines('english'),zh=lines('chinese'),count=Math.max(en.length,zh.length);
- const enSize=+$('enSize').value,zhSize=+$('zhSize').value,gap=+$('gapSize').value;
- $('enValue').textContent=enSize+' px';$('zhValue').textContent=zhSize+' px';$('gapValue').textContent=gap+' px';
- const root=$('preview');root.style.setProperty('--en-size',enSize+'px');root.style.setProperty('--zh-size',zhSize+'px');root.style.setProperty('--gap',gap+'px');root.replaceChildren();
- for(let i=0;i<count;i++){
-  if(!en[i]&&!zh[i])continue;
-  const pair=document.createElement('div');pair.className='pair';
-  const top=document.createElement('p');top.className='en';top.textContent=en[i]??'';
-  const bottom=document.createElement('p');bottom.className='zh';bottom.textContent=zh[i]??'';
+ const data=pairs(),root=$("preview");
+ const enSize=+$("enSize").value,zhSize=+$("zhSize").value,gap=+$("gapSize").value;
+ $("enValue").textContent=enSize+" px";$("zhValue").textContent=zhSize+" px";$("gapValue").textContent=gap+" px";
+ root.style.setProperty("--en-size",enSize+"px");root.style.setProperty("--zh-size",zhSize+"px");root.style.setProperty("--gap",gap+"px");root.replaceChildren();
+ data.items.forEach(item=>{
+  const pair=document.createElement("article");pair.className="pair";
+  const top=document.createElement("p");top.className="en";top.textContent=item.en;
+  const bottom=document.createElement("p");bottom.className="zh";bottom.textContent=item.zh;
   pair.append(top,bottom);root.append(pair);
+ });
+ const equal=data.en.length===data.zh.length&&data.en.every((v,i)=>v.trim()&&data.zh[i].trim());
+ $("status").textContent=equal
+  ? "配对正常："+data.items.length+" 组。普通文本已自动按容器宽度换行。"
+  : "配对不完整：英文 "+data.en.length+" 组 / 中文 "+data.zh.length+" 组。请补齐缺失内容；不会自动把后续文本错位配对。";
+ return data;
+}
+function download(name,content,type){
+ const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function exportJson(){
+ const data=update();
+ if(data.en.length!==data.zh.length||data.en.some((v,i)=>!v.trim()||!data.zh[i]?.trim())){
+  $("status").textContent+=" 修正配对后再导出。";return;
  }
- const status=$('status');
- if(en.length!==zh.length)status.textContent='行数不一致：英文 '+en.length+' 行，中文 '+zh.length+' 行。缺失行会留空，不会自动错位。';
- else status.textContent='已配对 '+en.length+' 行。';
+ download("TwinLine-pairs.json",JSON.stringify(data.items,null,2),"application/json;charset=utf-8");
 }
-function exportPairsJson(){\n const en=lines('english'),zh=lines('chinese');\n if(en.length!==zh.length||en.some((v,i)=>!v.trim()||!zh[i]?.trim())){ $('status').textContent='无法导出：两侧行数必须相同，且每行都要填写内容。'; return; }\n const data=en.map((v,i)=>({en:v,zh:zh[i]}));\n const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');\n a.href=url;a.download='pairs.json';document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);\n $('status').textContent='已导出 '+data.length+' 组字体配对数据。将 pairs.json 上传并替换仓库 samples/pairs.json，Actions 会自动构建 TTF。';\n}\nfunction exportHtml(){
- const en=lines('english'),zh=lines('chinese'),count=Math.max(en.length,zh.length);
- const enSize=+$('enSize').value,zhSize=+$('zhSize').value,gap=+$('gapSize').value;
- const pairs=[];
- for(let i=0;i<count;i++)if((en[i]??'')||(zh[i]??''))pairs.push('<section class="pair"><div class="en">'+esc(en[i]??'')+'</div><div class="zh">'+esc(zh[i]??'')+'</div></section>');
- const doc='<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>双层中英排版</title><style>body{margin:0;padding:28px;background:#050505;color:#f4f4f4;font-family:Arial,"Noto Sans SC",sans-serif}.page{max-width:900px;margin:auto}.pair{display:grid;gap:'+gap+'px;padding:15px 0 17px;border-bottom:1px solid #292929;break-inside:avoid}.en,.zh{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.08}.en{font-size:'+enSize+'px;font-weight:500}.zh{font-size:'+zhSize+'px;font-weight:400}</style></head><body><main class="page">'+pairs.join('\n')+'</main></body></html>';
- const blob=new Blob([doc],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=url;a.download='TwinLine-V2-layout.html';document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);
+function exportHtml(){
+ const data=update();
+ if(data.en.length!==data.zh.length||data.en.some((v,i)=>!v.trim()||!data.zh[i]?.trim())){
+  $("status").textContent+=" 修正配对后再导出。";return;
+ }
+ const enSize=+$("enSize").value,zhSize=+$("zhSize").value,gap=+$("gapSize").value;
+ const body=data.items.map(p=>'<article class="pair"><p class="en">'+esc(p.en)+'</p><p class="zh">'+esc(p.zh)+'</p></article>').join("\n");
+ const html='<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TwinLine 双层排版</title><style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#050505;color:#f4f4f4;font-family:Arial,"Noto Sans CJK SC",sans-serif}.page{max-width:1000px;margin:auto}.pair{display:grid;gap:'+gap+'px;padding:15px 0 17px;border-bottom:1px solid #292929;break-inside:avoid}.en,.zh{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.12}.en{font-size:'+enSize+'px;font-weight:500}.zh{font-size:'+zhSize+'px;font-weight:400}@media print{body{background:#fff;color:#111}.pair{border-color:#ddd}}</style></head><body><main class="page">'+body+'</main></body></html>';
+ download("TwinLine-layout.html",html,"text/html;charset=utf-8");
 }
-['english','chinese','enSize','zhSize','gapSize'].forEach(id=>$(id).addEventListener('input',update));
-$('example').addEventListener('click',()=>{$('english').value=sampleEn.join('\n');$('chinese').value=sampleZh.join('\n');update();});
-$('download').addEventListener('click',exportHtml);\n$('downloadJson').addEventListener('click',exportPairsJson);
+$("example").addEventListener("click",()=>{$("english").value=sampleEn;$("chinese").value=sampleZh;$("mode").value="lines";update();});
+$("downloadHtml").addEventListener("click",exportHtml);
+$("downloadJson").addEventListener("click",exportJson);
+$("print").addEventListener("click",()=>window.print());
+["english","chinese","mode","enSize","zhSize","gapSize"].forEach(id=>$(id).addEventListener("input",update));
 update();
 </script>
 </body>
