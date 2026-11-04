@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Build human-review queues from WMT News Commentary v16 and official WMT17 EN-ZH.
+"""Build automatic silver-reference data from WMT News Commentary v16 and WMT17 EN-ZH.
 
-Sentence boundaries are detected independently on both sides. The original
-parallel segment is only a proposed alignment group; it is never auto-promoted
-to human gold.
+Sentence boundaries are detected independently on both sides. Original parallel
+segments are weak silver references, not human-verified semantic gold.
 """
 from __future__ import annotations
 
@@ -48,11 +47,12 @@ def make_record(doc_id: str, movie_id: str, split: str,
             "proposed_unmatched_source": unmatched_s,
             "proposed_unmatched_target": unmatched_t,
             "oversize_proposed_groups": oversize,
-            "annotation_status": "pending_human_review",
-            "annotation_instructions": (
-                "The original WMT segment ID pair is a candidate group only. "
-                "Inspect both sides after independent sentence splitting, then correct "
-                "the group boundaries manually before setting human_verified."
+            "reference_status": "automatic_silver_reference",
+            "reference_provenance": "WMT parallel segment IDs joined by original document/segment keys",
+            "reference_notes": (
+                "Original WMT segment pair is a weak silver reference. "
+                "Sentence boundaries are detected independently; no manual verification is "
+                "claimed."
             ),
         })
     return records
@@ -60,7 +60,7 @@ def make_record(doc_id: str, movie_id: str, split: str,
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--output-dir", default="data/wmt-human-review")
+    ap.add_argument("--output-dir", default="data/wmt-silver")
     ap.add_argument("--calibration-documents", type=int, default=20)
     ap.add_argument("--max-segments-per-document", type=int, default=40)
     args = ap.parse_args()
@@ -149,7 +149,7 @@ def main() -> None:
         "languages": {"source": "English", "target": "Simplified Chinese only"},
         "simplified_policy": "OpenCC t2s; reject target text changed by conversion",
         "dialect_policy": "heuristic written-Cantonese marker filter inherited from download_parallel_corpus",
-        "gold_policy": "Original segment pair is only a proposed group; manual review required.",
+        "reference_policy": "Original segment pair is a weak silver reference; no manual review is required or claimed.",
         "split_policy": "News Commentary calibration; separate WMT17 documents held out for test.",
         "calibration_filter_counts": dict(calibration_counts),
         "test_filter_counts": dict(test_counts),
@@ -158,7 +158,7 @@ def main() -> None:
         "test_records": sum(x["split"] == "test" for x in records),
         "proposed_group_types": dict(group_types),
         "oversize_proposed_groups": oversize,
-        "annotation_queue": str(queue_path),
+        "silver_reference_corpus": str(queue_path),
     }
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
