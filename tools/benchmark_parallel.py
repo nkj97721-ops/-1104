@@ -163,6 +163,8 @@ def main() -> None:
     ap.add_argument("--no-cuda", action="store_true")
     args = ap.parse_args()
 
+    if args.block_size < 2:
+        raise ValueError("--block-size 必须至少为 2。")
     pairs = load_pairs(Path(args.input), args.limit)
     blocks = make_blocks(pairs, args.block_size)
     if len(blocks) < 5:
@@ -175,8 +177,6 @@ def main() -> None:
     if not test_ids:
         raise ValueError("测试集为空；请增加语料或减小 block-size。")
 
-    if args.block_size < 2:
-        raise ValueError("--block-size 必须至少为 2。")
     thresholds = sorted({float(x) for x in args.thresholds.split(",")})
     if not thresholds or any(not math.isfinite(x) or not -1.0 <= x <= 1.0 for x in thresholds):
         raise ValueError("阈值必须是 [-1, 1] 内的有限余弦相似度。")
