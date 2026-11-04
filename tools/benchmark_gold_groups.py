@@ -168,7 +168,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--input", required=True, help="Manually annotated JSONL with calibration/test split labels")
     ap.add_argument("--output", default="gold-group-benchmark.json")
-    ap.add_argument("--model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    ap.add_argument(
+        "--models",
+        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE",
+        help="Comma-separated sentence-transformer candidates; each model is calibrated independently",
+    )
     ap.add_argument("--thresholds", default="0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60")
     ap.add_argument("--gap-penalties", default="0.06,0.12,0.18,0.24")
     ap.add_argument("--merge-penalties", default="0.02,0.06,0.10,0.14")
@@ -178,6 +182,9 @@ def main() -> None:
     docs = load_documents(Path(args.input))
     dev = [x for x in docs if x["split"] == "calibration"]
     test = [x for x in docs if x["split"] == "test"]
+    models = list(dict.fromkeys(x.strip() for x in args.models.split(",") if x.strip()))
+    if not models:
+        raise ValueError("At least one sentence embedding model is required")
     thresholds = sorted({float(x) for x in args.thresholds.split(",")})
     gaps = sorted({float(x) for x in args.gap_penalties.split(",")})
     merges = sorted({float(x) for x in args.merge_penalties.split(",")})
@@ -185,50 +192,78 @@ def main() -> None:
             or any(not math.isfinite(x) or x < 0 for x in gaps + merges)):
         raise ValueError("Invalid threshold or penalty grid")
 
-    # Load each document embedding exactly once; parameter search reuses vectors.
-    vectors_by_id = {
-        x["id"]: encode_sentences(x["source"] + x["target"], args.model, args.no_cuda)
-        for x in docs
-    }
-    candidates = []
-    for threshold, gap, merge in itertools.product(thresholds, gaps, merges):
-        rows = [evaluate_document(x, vectors_by_id[x["id"]], threshold, gap, merge) for x in dev]
-        summary = aggregate(rows)
-        candidates.append({
-            "threshold": threshold, "gap_penalty": gap, "merge_penalty": merge,
-            "calibration": summary,
+    model_reports = []
+    for model in models:
+        # Encode each document once per model; calibration grid reuses cached vectors.
+        vectors_by_id = {
+            x["id"]: encode_sentences(x["source"] + x["target"], model, args.no_cuda)
+            for x in docs
+        }
+        candidates = []
+        for threshold, gap, merge in itertools.product(thresholds, gaps, merges):
+            rows = [
+                evaluate_document(x, vectors_by_id[x["id"]], threshold, gap, merge)
+                for x in dev
+            ]
+            candidates.append({
+                "threshold": threshold,
+                "gap_penalty": gap,
+                "merge_penalty": merge,
+                "calibration": aggregate(rows),
+            })
+        best = max(candidates, key=lambda x: (
+            x["calibration"]["group"]["f1"],
+            x["calibration"]["link"]["f1"],
+            x["calibration"]["group"]["precision"],
+        ))
+        # Each candidate model is evaluated on held-out documents only after
+        # its own parameters have been frozen using calibration documents.
+        heldout_rows = [
+            evaluate_document(
+                x, vectors_by_id[x["id"]], best["threshold"],
+                best["gap_penalty"], best["merge_penalty"],
+            )
+            for x in test
+        ]
+        model_reports.append({
+            "model": model,
+            "selected_parameters": {
+                k: best[k] for k in ("threshold", "gap_penalty", "merge_penalty")
+            },
+            "calibration": best["calibration"],
+            "independent_test": aggregate(heldout_rows),
+            "test_document_details": heldout_rows,
+            "calibration_grid": candidates,
         })
-    best = max(candidates, key=lambda x: (
+
+    # Select the deployable candidate from calibration scores only. Test scores
+    # are reported for comparison and never used to choose the winner.
+    selected = max(model_reports, key=lambda x: (
         x["calibration"]["group"]["f1"],
         x["calibration"]["link"]["f1"],
         x["calibration"]["group"]["precision"],
     ))
-    # Test documents are evaluated once, after all parameters are frozen.
-    heldout_rows = [
-        evaluate_document(x, vectors_by_id[x["id"]], best["threshold"],
-                          best["gap_penalty"], best["merge_penalty"])
-        for x in test
-    ]
     report = {
-        "model": args.model,
         "annotation_format": "document-level explicit sentence groups; zero-based indices",
         "supported_gold_group_types": ["1:1", "1:2", "2:1"],
         "unmatched_policy": "Any sentence omitted from all gold groups is explicitly treated as unmatched.",
-        "selection": {
-            "parameters": {k: best[k] for k in ("threshold", "gap_penalty", "merge_penalty")},
-            "objective": "calibration group-level exact-match F1, then link-level F1",
-            "calibration": best["calibration"],
-        },
-        "independent_test": aggregate(heldout_rows),
-        "test_document_details": heldout_rows,
-        "calibration_grid": candidates,
-        "warning": "This score is valid only for the supplied human-annotated documents; it does not inherit or validate the legacy TSV 1:1 score.",
+        "selection_rule": "Choose model by calibration group-level exact-match F1, then link-level F1; never select by held-out results.",
+        "selected_model_on_calibration": selected["model"],
+        "model_comparisons": model_reports,
+        "warning": "Scores apply only to supplied human-annotated documents; they do not inherit or validate the legacy TSV 1:1 score.",
     }
     Path(args.output).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
-        "parameters": report["selection"]["parameters"],
-        "calibration": report["selection"]["calibration"],
-        "independent_test": report["independent_test"],
+        "selected_model_on_calibration": report["selected_model_on_calibration"],
+        "model_comparisons": [
+            {
+                "model": x["model"],
+                "selected_parameters": x["selected_parameters"],
+                "calibration": x["calibration"],
+                "independent_test": x["independent_test"],
+            }
+            for x in model_reports
+        ],
         "output": args.output,
     }, ensure_ascii=False, indent=2))
 
