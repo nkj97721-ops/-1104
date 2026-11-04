@@ -62,12 +62,12 @@ def build_similarity_tables(vectors: list[list[float]], n: int):
     source_pairs = source_pairs / np.maximum(
         np.linalg.norm(source_pairs, axis=1, keepdims=True), 1e-12
     )
-    return (
+    return tuple(np.clip(table, -1.0, 1.0) for table in (
         source @ target.T,
         source @ target_pairs.T,
         source_pairs @ target.T,
         source_pairs @ target_pairs.T,
-    )
+    ))
 
 
 def evaluate_block(block: list[tuple[str, str]], vectors: list[list[float]],
