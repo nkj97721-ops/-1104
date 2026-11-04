@@ -81,8 +81,7 @@ def iter_dataset_rows() -> Iterator[dict[str, Any]]:
     if total_rows <= 0 or first.get("partial"):
         raise RuntimeError("Dataset Viewer did not return a complete, non-empty train split.")
 
-    for item in first.get("rows", []):
-        yield item["row"]
+    yield from _extract_page_rows(first, 0, min(PAGE_SIZE, total_rows))
 
     offsets = range(PAGE_SIZE, total_rows, PAGE_SIZE)
     with ThreadPoolExecutor(max_workers=PREFETCH_PAGES) as executor:
@@ -90,13 +89,31 @@ def iter_dataset_rows() -> Iterator[dict[str, Any]]:
         for offset in offsets:
             pending_offsets.append(offset)
             if len(pending_offsets) == PREFETCH_PAGES:
-                yield from _fetch_pages_in_order(executor, pending_offsets, config)
+                yield from _fetch_pages_in_order(executor, pending_offsets, config, total_rows)
                 pending_offsets.clear()
         if pending_offsets:
-            yield from _fetch_pages_in_order(executor, pending_offsets, config)
+            yield from _fetch_pages_in_order(executor, pending_offsets, config, total_rows)
 
 
-def _fetch_pages_in_order(executor, offsets: list[int], config: str):
+def _extract_page_rows(payload: dict[str, Any], offset: int, expected_count: int):
+    items = payload.get("rows", [])
+    if len(items) != expected_count:
+        raise RuntimeError(
+            f"Dataset Viewer page at offset {offset} is incomplete: "
+            f"expected {expected_count} rows, received {len(items)}."
+        )
+    for index, item in enumerate(items):
+        if int(item.get("row_idx", -1)) != offset + index:
+            raise RuntimeError(
+                f"Dataset Viewer row order mismatch at offset {offset + index}."
+            )
+        row = item.get("row")
+        if not isinstance(row, dict) or not {"source", "target"}.issubset(row):
+            raise RuntimeError("Dataset Viewer row is missing source/target pair fields.")
+        yield row
+
+
+def _fetch_pages_in_order(executor, offsets: list[int], config: str, total_rows: int):
     futures = [
         executor.submit(request_json, "/rows", {
             "dataset": DATASET_ID, "config": config, "split": "train",
@@ -104,12 +121,12 @@ def _fetch_pages_in_order(executor, offsets: list[int], config: str):
         })
         for offset in offsets
     ]
-    for future in futures:
+    for offset, future in zip(offsets, futures):
         payload = future.result()
         if payload.get("partial"):
             raise RuntimeError("Dataset Viewer returned a partial page; refusing incomplete corpus.")
-        for item in payload.get("rows", []):
-            yield item["row"]
+        expected_count = min(PAGE_SIZE, total_rows - offset)
+        yield from _extract_page_rows(payload, offset, expected_count)
 
 
 def download_pairs(
