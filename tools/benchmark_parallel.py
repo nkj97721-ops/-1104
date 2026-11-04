@@ -192,7 +192,7 @@ def main() -> None:
         all_vectors = encode_sentences(all_texts, model_name, args.no_cuda)
         model_vectors[model_name] = all_vectors
         pair_count = len(pairs)
-        encoded: dict[int, list[list[float]]] = {}
+        encoded: dict[int, Any] = {}
         offset = 0
         for index, block in enumerate(blocks):
             size = len(block)
