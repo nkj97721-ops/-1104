@@ -17,6 +17,11 @@ class SpecimenTests(unittest.TestCase):
         self.assertIn("wrapPair", self.renderer)
         self.assertIn("splitOneLine", self.renderer)
         self.assertIn("paragraphBlocks", self.renderer)
+        self.assertIn("splitSentences", self.renderer)
+        self.assertIn("preparePairs", self.renderer)
+        self.assertIn("数量不一致", self.renderer)
+        self.assertIn("按句子配对", self.html)
+        self.assertIn("已暂停输出", self.html)
         self.assertIn("new ResizeObserver", self.html)
         self.assertIn("TwinLine-layout.html", self.html)
 
