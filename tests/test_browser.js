@@ -21,7 +21,8 @@ const { chromium } = require("playwright");
    buffer:Buffer.from(JSON.stringify(alignmentFixture))
   });
   await page.waitForFunction(()=>!document.querySelector("#alignmentReview").hidden);
-  assert.equal(await page.locator("#alignmentCandidates input").count(),2);\n  assert.match(await page.locator("#alignmentMeta").textContent(),/未匹配英文：extra sentence\\./);
+  assert.equal(await page.locator("#alignmentCandidates input").count(),2);
+  assert.match(await page.locator("#alignmentMeta").textContent(),/未匹配英文：extra sentence\./);
   await page.locator("#alignmentCandidates input").nth(0).check();
   await page.locator("#alignmentCandidates input").nth(1).check();
   await page.locator("#applyAlignment").click();
