@@ -60,7 +60,7 @@ class CorpusFilteringTests(unittest.TestCase):
     def test_tsv_parser_splits_only_at_first_tab(self):
         self.assertEqual(
             CORPUS.parse_parallel_line("Hello" + chr(9) + "你好" + chr(9) + "附注"),
-            {"source": "Hello", "target": "你好\\t附注"},
+            {"source": "Hello", "target": "你好" + chr(9) + "附注"},
         )
 
     def test_malformed_tsv_line_is_rejected_as_empty(self):
