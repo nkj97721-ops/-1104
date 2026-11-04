@@ -114,6 +114,9 @@ def download_pairs(
                 if not limit or counters["written"] < limit:
                     stream.write(en + "\t" + zh + "\n")
                     counters["written"] += 1
+                    if limit and counters["written"] >= limit:
+                        stopped_at_limit = True
+                        break
 
         if counters["written"] < 100:
             raise RuntimeError(
