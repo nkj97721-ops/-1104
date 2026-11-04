@@ -109,10 +109,10 @@ python tools/align_document.py \
 
 ## 英文—简体中文真实语料准确率基准（V4）
 
-**语料必须是英文 + 简体中文。** 基准使用 OPUS OpenSubtitles v2024 的明确语言对 `en–zh-CN`，通过 Hugging Face 上的配对数据集镜像逐条流式读取（每条记录自身包含 source/target），不再分别下载两份超大文本再按行号硬配对。镜像数据集说明其包含简体中文，但也承认存在替代字幕、改写及非平行结构；下载器会过滤空行、非英文源文本、非中文目标文本、OpenCC 可识别的繁体文本，并用常见书面粤语标记做额外启发式过滤。粤语过滤不是完整的方言分类器，不能据此声称零粤语。
+**语料必须是英文 + 简体中文。** 基准使用 OPUS OpenSubtitles v2024 的明确语言对 `en–zh-CN`，通过 Hugging Face Dataset Viewer 的分页 JSON API 逐条读取配对数据（每条记录自身包含 source/target），不加载 PyArrow 或整份 998 MB Parquet 文件，不再分别下载两份超大文本再按行号硬配对。镜像数据集说明其包含简体中文，但也承认存在替代字幕、改写及非平行结构；下载器会过滤空行、非英文源文本、非中文目标文本、OpenCC 可识别的繁体文本，并用常见书面粤语标记做额外启发式过滤。粤语过滤不是完整的方言分类器，不能据此声称零粤语。
 
 ```bash
-python -m pip install "datasets>=3,<5" opencc-python-reimplemented
+python -m pip install opencc-python-reimplemented
 python tools/download_parallel_corpus.py --output data/opensubtitles-en-zh-cn.tsv --limit 10000
 python tools/benchmark_parallel.py \
   --input data/opensubtitles-en-zh-cn.tsv \
