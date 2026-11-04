@@ -6,14 +6,20 @@ unmatched sentences on either side. Embeddings are supplied by the caller.
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from typing import Any, Sequence
 
 SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s*")
 
 
 def split_sentences(text: str) -> list[str]:
     """Split English/Chinese text while preserving terminal punctuation."""
-    return [part.strip() for part in SENTENCE_END.split(text.strip()) if part.strip()]
+    protected = ABBREVIATIONS.sub(lambda match: match.group().replace(".", "\\uE000"), text.strip())
+    protected = re.sub(r"(?<=\\d)\\.(?=\\d)", "\\uE000", protected)
+    return [
+        part.replace("\\uE000", ".").strip()
+        for part in SENTENCE_END.split(protected)
+        if part.strip()
+    ]
 
 
 def align_sentence_embeddings(
@@ -60,6 +66,8 @@ def align_sentence_embeddings(
         raise ValueError("Sentence vectors must contain only finite values")
 
     if similarity_tables is not None:
+        if len(similarity_tables) != 3:
+            raise ValueError("Exactly three similarity tables are required")
         expected_shapes = ((n, m), (n, max(0, m - 1)), (max(0, n - 1), m))
         for table, expected in zip(similarity_tables, expected_shapes):
             shape = getattr(table, "shape", None)
@@ -148,7 +156,7 @@ def encode_sentences(
     model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     no_cuda: bool = False,
     batch_size: int = 16,
-) -> list[list[float]]:
+) -> Any:
     """Create local multilingual sentence embeddings trained for semantic similarity."""
     import torch
     from sentence_transformers import SentenceTransformer
