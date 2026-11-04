@@ -51,6 +51,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_sentence*.py' -v
           python -m unittest discover -s tests -p 'test_download_parallel_corpus.py' -v
+          python -m unittest discover -s tests -p 'test_wmt17_test.py' -v
 
       - name: Download paired WMT News Commentary v16 TSV
         run: |
@@ -58,11 +59,16 @@ jobs:
             --output data/news-commentary-en-zh.tsv \
             --limit 10000
 
+      - name: Download independent official WMT17 EN-ZH test set
+        run: |
+          python tools/download_wmt17_test.py --output data/wmt17-en-zh-test.tsv
+
       - name: Compare models and tune threshold plus DP penalties
         run: |
           mkdir -p reports
           python tools/benchmark_parallel.py \
             --input data/news-commentary-en-zh.tsv \
+            --test-input data/wmt17-en-zh-test.tsv \
             --models sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE \
             --block-size 20 \
             --thresholds 0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60 \
@@ -79,5 +85,7 @@ jobs:
             reports/
             data/news-commentary-en-zh.tsv
             data/news-commentary-en-zh.tsv.manifest.json
+            data/wmt17-en-zh-test.tsv
+            data/wmt17-en-zh-test.tsv.manifest.json
           if-no-files-found: warn
           retention-days: 30
