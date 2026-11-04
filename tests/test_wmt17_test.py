@@ -28,8 +28,8 @@ class WMT17SGMTests(unittest.TestCase):
             ("doc-a", "2"): "Second",
         }
         target = {
-            ("doc-a", "1"): "第一",
             ("doc-a", "2"): "第二",
+            ("doc-a", "1"): "第一",
         }
         pairs = join_segment_pairs(source, target)
         self.assertEqual(
