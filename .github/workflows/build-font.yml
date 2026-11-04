@@ -6,6 +6,7 @@ on:
       - 'font_studio.py'
       - 'samples/**'
       - 'tests/**'
+      - 'specimen/**'
       - '.github/workflows/build-font.yml'
   workflow_dispatch:
 jobs:
