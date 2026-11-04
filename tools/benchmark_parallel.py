@@ -332,10 +332,10 @@ def main() -> None:
     for index, block in enumerate(blocks):
         size = len(block)
         if index in test_ids:
-            block_vectors = (
-                selected_vectors[offset:offset + size]
-                + selected_vectors[pair_count + offset:pair_count + offset + size]
-            )
+            block_vectors = np.concatenate((
+                selected_vectors[offset:offset + size],
+                selected_vectors[pair_count + offset:pair_count + offset + size],
+            ), axis=0)
             baseline_rows.append(
                 evaluate_block(block, block_vectors, 0.35, 0.12, 0.06,
                                selected_similarity_cache[index])
