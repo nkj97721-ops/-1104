@@ -54,3 +54,5 @@ then evaluates the frozen parameters on test documents once. It reports:
 The benchmark does not manufacture annotations from the legacy TSV. Until a
 representative human-reviewed calibration set and independent test set exist,
 no new aggregate accuracy should be described as a validated real-world score.
+
+Both MiniLM and LaBSE are calibrated independently by default and each is evaluated on the same held-out documents. The deployable candidate is selected using calibration scores only; held-out scores are never used for model selection.
