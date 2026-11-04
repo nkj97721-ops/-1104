@@ -157,10 +157,9 @@
   function phraseLines(value) {
     // Normalize real CRLF/CR line endings; never discard blank rows because
     // dropping one side would silently shift every following bilingual pair.
-    return value.replace(/\\r\\n?/g, "\\n").split("\\n")
+    return value.replace(/\r\n?/g, "\n").split("\n")
       .map((line, index) => ({ line: index + 1, parts: line.split("|").map(part => part.trim()) }));
   }
-
   function splitSentences(value) {
     const text = value.replace(/\r/g, "").replace(/\n+/g, " ").trim();
     if (!text) return [];
