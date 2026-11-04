@@ -1,4 +1,5 @@
 # Install the local bilingual alignment engine (CPU or CUDA PyTorch).
 jieba>=0.42.1
 git+https://github.com/neulab/awesome-align.git
-transformers>=4.40,<5\nsentence-transformers>=3.0,<6\n
+transformers>=4.40,<5
+sentence-transformers>=3.0,<6
