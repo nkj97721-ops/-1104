@@ -107,22 +107,24 @@ python tools/align_document.py \
 
 注意：当前句子匹配保持原文顺序，不会任意重排；句向量相似度和对齐分数都不是翻译正确概率。句子层可以识别不同数量及 1:2/2:1 分组，但真实语料准确率仍需基准测试。句级模型默认使用 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`，词级模型使用 `bert-base-multilingual-cased`；两者均在本地运行；首次下载模型后可使用缓存。
 
-## 真实平行语料准确率基准（V3）
+## 英文—简体中文真实语料准确率基准（V4）
 
-不要用手工编写的示例句子报告模型准确率。现在提供 OPUS TED2020 英中平行语料下载器和独立校准/留出测试脚本：
+**语料必须是简体中文。** 基准使用 OPUS OpenSubtitles v2024 的明确语言对 `en–zh-CN`，不再使用语言代码含义不明确的 `zh`，也不再使用 TED2020（其本次下载到的中文实际为繁体粤语）。下载器还使用 OpenCC 的繁转简检测，过滤包含繁体专用字形的行。
 
 ```bash
-python tools/download_parallel_corpus.py --output data/ted2020-en-zh.tsv
+python -m pip install opencc-python-reimplemented
+python tools/download_parallel_corpus.py --output data/opensubtitles-en-zh-cn.tsv --limit 10000
 python tools/benchmark_parallel.py \
-  --input data/ted2020-en-zh.tsv \
+  --input data/opensubtitles-en-zh-cn.tsv \
   --models sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE \
   --block-size 20 \
-  --output reports/ted2020-minilm-benchmark.json
+  --output reports/opensubtitles-zh-cn-benchmark.json
 ```
 
-输入 TSV 每行是一条语料原生英中句对。脚本按连续句对构造文档块，先按块划分校准集和留出测试集；比较 MiniLM 与 LaBSE 两个候选句向量模型，并只在校准集上扫描 0.20–0.60 的阈值，按精确配对 F1 选择模型和阈值，再在未参与调参的测试集上报告结果。输出逐项列出错误的 1:1 配对、1:N / N:1 合并、未匹配英文和未匹配中文。可用 `--thresholds` 指定更细的扫描网格，`--limit` 控制语料规模。
+基准比较 MiniLM 与 LaBSE 两个句向量模型，并只在校准集上扫描阈值及 DP gap/merge 惩罚参数，再在独立留出块上报告准确率、召回率、F1 和错配案例。OpenSubtitles 是影视字幕语料，口语比例高，且包含字幕切分、漏译、改写和多版本字幕等噪声；因此结果代表该语料上的句子对齐表现，不代表正式书面中文或翻译质量的普遍准确率。
 
-**指标边界：**该基准使用语料原生句对作为 gold alignment，衡量文档级句子配对，不等同于词级/短语级翻译正确率。词级短语候选仍需独立人工标注的 gold span 才能计算精确率、召回率。不得把句级分数宣传成短语翻译准确率。语料仅下载到本地，不提交到 Git 仓库；使用或再分发前须核对 OPUS TED2020 当前许可与署名要求。
+**语言验收规则：** 输出语料只保留英文 + 简体中文；繁体粤语不作为目标文本。若下载包内缺少明确的 `.zh-CN` / `.zh_CN` 文件，下载器会直接报错，不会静默回退到含义不明的 `.zh` 文件。语料来源：OPUS OpenSubtitles v2024；使用前遵守该语料的来源与许可条款。
+
 
 运行基础回归测试：
 
