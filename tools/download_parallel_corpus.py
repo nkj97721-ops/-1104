@@ -22,12 +22,21 @@ LATIN = re.compile(r"[A-Za-z]")
 
 
 def parse_parallel_line(line: str) -> dict[str, str]:
-    """Parse one source-preserving TSV record; never zip independent files."""
+    """Parse one source-preserving TSV record; never zip independent files.
+
+    Blank physical lines are ignored. Any non-blank record without both
+    language columns is rejected instead of silently shifting later pairs.
+    """
     line = line.rstrip("\r\n")
-    if "\t" not in line:
+    if not line:
         return {"source": "", "target": ""}
+    if "\t" not in line:
+        raise ValueError("Malformed parallel TSV record: expected EN<TAB>ZH")
     source, target = line.split("\t", 1)
-    return {"source": source.lstrip("\ufeff"), "target": target}
+    source = source.lstrip("\ufeff")
+    if not source.strip() or not target.strip():
+        raise ValueError("Malformed parallel TSV record: English or Chinese field is empty")
+    return {"source": source, "target": target}
 
 
 def normalize_pair(row: dict[str, Any], traditional_to_simplified) -> tuple[str, str, str | None]:
@@ -58,8 +67,11 @@ def iter_dataset_rows() -> Iterator[dict[str, str]]:
     with urlopen(request, timeout=120) as response:
         with gzip.GzipFile(fileobj=response, mode="rb") as compressed:
             with io.TextIOWrapper(compressed, encoding="utf-8", newline="") as text_stream:
-                for line in text_stream:
-                    yield parse_parallel_line(line)
+                for line_number, line in enumerate(text_stream, 1):
+                    try:
+                        yield parse_parallel_line(line)
+                    except ValueError as exc:
+                        raise ValueError(f"WMT TSV line {line_number}: {exc}") from exc
 
 
 def download_pairs(
