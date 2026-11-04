@@ -1,6 +1,6 @@
 """Sentence segmentation and monotonic document-level alignment.
 
-The dynamic program supports 1:1, 1:2 and 2:1 sentence groups, plus
+The dynamic program supports 1:1, 1:2, 2:1 and 2:2 sentence groups, plus
 unmatched sentences on either side. Embeddings are supplied by the caller.
 """
 from __future__ import annotations
