@@ -12,7 +12,7 @@ class SilverGroupFilteringTests(unittest.TestCase):
             "id": "cal-1",
             "movie_id": "movie-cal",
             "split": "calibration",
-            "annotation_status": "pending_human_review",
+            "reference_status": "automatic_silver_reference",
             "source": ["A", "B", "C", "D", "E"],
             "target": ["甲", "乙", "丙", "丁"],
             "proposed_groups": [
@@ -26,7 +26,7 @@ class SilverGroupFilteringTests(unittest.TestCase):
             "id": "test-1",
             "movie_id": "movie-test",
             "split": "test",
-            "annotation_status": "pending_human_review",
+            "reference_status": "automatic_silver_reference",
             "source": ["X"],
             "target": ["戊"],
             "proposed_groups": [{"source": [0], "target": [0]}],
