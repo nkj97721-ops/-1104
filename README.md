@@ -46,6 +46,28 @@ python build_font.py --input samples/pairs.json --output dist/My-TwinLine.ttf --
 
 两侧数量不一致时会明确提示，不会把后续文本静默错位。可调整字号、层间距，导出独立 HTML 文件，或打印/保存为 PDF。导出文件可直接在浏览器打开，不需要安装字体或转换私用区字符。
 
+## 自动语义对齐（本地模型）
+
+新增 `tools/semantic_align.py`：使用 AWESOME-align 的 multilingual BERT 词级对齐模型，不再按句子序号或字符长度猜测对应关系。模型在本机运行；首次运行会从 Hugging Face 下载模型权重（默认 `bert-base-multilingual-cased`），之后可使用缓存模型离线推理。
+
+安装（建议 Python 3.9–3.11，PyTorch 按机器 CPU/CUDA 环境选择）：
+
+```bash
+python -m pip install -r tools/requirements-semantic-align.txt
+```
+
+执行一组英中句子：
+
+```bash
+python tools/semantic_align.py \
+  --en "take a closer look at the issue" \
+  --zh "仔细看一看这个问题" \
+  --output alignment.json
+```
+
+输出 JSON 包含英文词、中文词的分词结果、模型给出的词级对应链接及链接概率，以及基于词级链接一致性提取的短语候选、跨度、覆盖率、对齐分数和高/中/低分档。
+
+候选提取遵循短语一致性约束：候选中文跨度不能包含连接到候选英文跨度之外的词。短语候选是模型建议，不是自动翻译，也不保证每个候选都语义正确。分数是模型内部对齐启发式分数，不是经过校准的“翻译正确概率”；习语、省略、倒装和跨句语义仍需人工核对。模型权重约数百 MB，CPU 推理可能较慢；可用 `--no-cuda` 强制 CPU，或用 `--model` 指向本地模型目录。
 ## 在线排版预览
 
 浏览器排版器处理任意普通文本；独立 TTF 则将有限的配对内容固化为私用区字形，两者用途不同。
