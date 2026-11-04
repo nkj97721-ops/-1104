@@ -129,13 +129,15 @@ def prf(correct: int, predicted: int, gold: int) -> dict[str, float]:
 
 def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
                       gap_penalty: float, merge_penalty: float,
-                      similarity_tables=None) -> dict[str, Any]:
+                      similarity_tables=None,
+                      two_two_penalty: float | None = None) -> dict[str, Any]:
     source, target = doc["source"], doc["target"]
     result = align_sentence_embeddings(
         vectors[:len(source)], vectors[len(source):],
         threshold=threshold, gap_penalty=gap_penalty,
         merge_penalty=merge_penalty,
         similarity_tables=similarity_tables,
+        two_two_penalty=two_two_penalty,
     )
     predicted_groups = {
         (tuple(x["source_indices"]), tuple(x["target_indices"]))
