@@ -122,6 +122,47 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
     unmatched_predicted = len(pred_unmatched_s) + len(pred_unmatched_t)
     unmatched_gold = len(gold_unmatched_s) + len(gold_unmatched_t)
     breakdown = Counter(f"{len(si)}:{len(ti)}" for si, ti in predicted_groups)
+    error_examples = []
+    for si, ti in sorted(predicted_groups - gold_groups)[:10]:
+        error_examples.append({
+            "type": "false_positive_group",
+            "source_indices": list(si),
+            "target_indices": list(ti),
+            "source_texts": [source[i] for i in si],
+            "target_texts": [target[j] for j in ti],
+        })
+    for si, ti in sorted(gold_groups - predicted_groups)[:10]:
+        error_examples.append({
+            "type": "missed_gold_group",
+            "source_indices": list(si),
+            "target_indices": list(ti),
+            "source_texts": [source[i] for i in si],
+            "target_texts": [target[j] for j in ti],
+        })
+    for index in sorted(pred_unmatched_s - gold_unmatched_s)[:5]:
+        error_examples.append({
+            "type": "false_unmatched_source",
+            "source_index": index,
+            "source_text": source[index],
+        })
+    for index in sorted(pred_unmatched_t - gold_unmatched_t)[:5]:
+        error_examples.append({
+            "type": "false_unmatched_target",
+            "target_index": index,
+            "target_text": target[index],
+        })
+    for index in sorted(gold_unmatched_s - pred_unmatched_s)[:5]:
+        error_examples.append({
+            "type": "missed_unmatched_source",
+            "source_index": index,
+            "source_text": source[index],
+        })
+    for index in sorted(gold_unmatched_t - pred_unmatched_t)[:5]:
+        error_examples.append({
+            "type": "missed_unmatched_target",
+            "target_index": index,
+            "target_text": target[index],
+        })
     return {
         "id": doc["id"],
         "source_sentences": len(source),
@@ -139,6 +180,7 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
         "correct_unmatched": unmatched_correct,
         "unmatched": prf(unmatched_correct, unmatched_predicted, unmatched_gold),
         "predicted_group_types": dict(breakdown),
+        "error_examples": error_examples,
         "predicted": [
             {"source": list(si), "target": list(ti)}
             for si, ti in sorted(predicted_groups)
