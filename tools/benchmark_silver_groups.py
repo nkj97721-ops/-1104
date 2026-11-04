@@ -204,6 +204,7 @@ def main() -> None:
                 "calibration_silver": aggregate(rows),
             })
         best = max(candidates, key=lambda x: (
+            x["calibration_silver"]["macro_group_type_f1"] or 0.0,
             x["calibration_silver"]["group"]["f1"],
             x["calibration_silver"]["link"]["f1"],
         ))
