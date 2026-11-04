@@ -174,7 +174,7 @@ python tools/prepare_wmt_gold_queue.py \
 python tools/benchmark_silver_groups.py \
   --input data/opensubtitles2024-silver/silver_reference.jsonl \
   --output reports/opensubtitles2024-silver-comparison.json \
-  --max-documents-per-split 20 --no-cuda
+  --max-documents-per-split 60 --no-cuda
 python tools/benchmark_silver_groups.py \
   --input data/wmt-silver/silver_reference.jsonl \
   --output reports/wmt17-silver-comparison.json \
@@ -186,6 +186,7 @@ python tools/benchmark_silver_groups.py \
 - 句组精确匹配 Precision / Recall / F1。
 - 单独报告 1:1、1:2、2:1、2:2 四种组型的 Precision / Recall / F1。
 - 句子链接 Precision / Recall / F1。
+- 参数仅用校准集选择，以 1:1、1:2、2:1、2:2 各组型宏平均 F1 为首要目标；同时报告微平均 F1。
 - 文档级 bootstrap 95% 置信区间及文档宏平均 F1。
 - 逐文档错配文本、误报组和漏报组。
 - 超过 2 句的复杂组按区域排除，不把它们错误地当作未匹配句。
