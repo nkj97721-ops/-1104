@@ -12,7 +12,8 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-URL = "https://object.pouta.csc.fi/OPUS-OpenSubtitles/v2024/moses/en-zh-CN.txt.zip"
+# OPUS uses the ISO-style zh_CN suffix in the downloadable archive name.
+URL = "https://object.pouta.csc.fi/OPUS-OpenSubtitles/v2024/moses/en-zh_CN.txt.zip"
 
 
 def locate_pair(names: list[str]) -> tuple[str, str]:
@@ -22,7 +23,7 @@ def locate_pair(names: list[str]) -> tuple[str, str]:
     for en in en_files:
         stem = en[:-3]
         for zh in zh_files:
-            if zh.rsplit(".", 1)[0] == stem:
+            if zh.rsplit(".", 1)[0].lower() == stem.lower():
                 matches.append((en, zh))
     if not matches:
         raise RuntimeError(
@@ -70,8 +71,6 @@ def main() -> None:
             en, zh = en.strip(), zh.strip()
             if not en or not zh:
                 continue
-            # The corpus is labeled zh-CN; this additional content check
-            # excludes rows containing traditional-only forms.
             if traditional_to_simplified.convert(zh) != zh:
                 traditional_filtered += 1
                 continue
