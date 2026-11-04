@@ -154,6 +154,12 @@
     return value.replace(/\r/g, "").split("\n").map(line => line.trim());
   }
 
+  function phraseLines(value) {
+    return value.replace(/\\r/g, "").split("\\n")
+      .map((line, index) => ({ line: index + 1, parts: line.split("|").map(part => part.trim()) }))
+      .filter(item => item.parts.some(Boolean));
+  }
+
   function splitSentences(value) {
     const text = value.replace(/\r/g, "").replace(/\n+/g, " ").trim();
     if (!text) return [];
@@ -183,6 +189,32 @@
         if (!value || !zh[i]) errors.push("第 " + (i + 1) + " 行为空，请补齐对应内容。");
         else pairs.push({ en: value, zh: zh[i], source: "line", index: i + 1 });
       });
+      return { pairs, errors };
+    }
+
+    if (mode === "phrases") {
+      const enLines = phraseLines(english);
+      const zhLines = phraseLines(chinese);
+      if (enLines.length !== zhLines.length) {
+        errors.push("短语模式要求两侧非空句子行数相同：英文 " + enLines.length + " 行，中文 " + zhLines.length + " 行。");
+        return { pairs, errors };
+      }
+      for (let i = 0; i < enLines.length; i++) {
+        const enParts = enLines[i].parts;
+        const zhParts = zhLines[i].parts;
+        if (enParts.length !== zhParts.length) {
+          errors.push("第 " + (i + 1) + " 行短语数量不一致：英文 " + enParts.length + " 段，中文 " + zhParts.length + " 段。该行不会输出。");
+          continue;
+        }
+        for (let j = 0; j < enParts.length; j++) {
+          if (!enParts[j] || !zhParts[j]) {
+            errors.push("第 " + (i + 1) + " 行第 " + (j + 1) + " 组短语为空，请补齐或调整分隔符。");
+            continue;
+          }
+          pairs.push({ en: enParts[j], zh: zhParts[j], source: "phrase", line: i + 1, index: j + 1 });
+        }
+      }
+      if (errors.length) pairs.length = 0;
       return { pairs, errors };
     }
 
@@ -288,7 +320,7 @@
   }
 
   const api = {
-    wrapText, wrapPair, splitOneLine, paragraphBlocks, lineBlocks,
+    wrapText, wrapPair, splitOneLine, paragraphBlocks, lineBlocks, phraseLines,
     splitSentences, preparePairs, render
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
