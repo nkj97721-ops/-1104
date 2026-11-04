@@ -74,7 +74,7 @@ def main() -> None:
     converter = OpenCC("t2s")
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    queue_path = out_dir / "annotation_queue.jsonl"
+    queue_path = out_dir / "silver_reference.jsonl"
     records: list[dict[str, Any]] = []
     calibration_counts = Counter()
     accepted_pairs: list[tuple[str, str]] = []
