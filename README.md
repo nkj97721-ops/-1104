@@ -12,7 +12,7 @@
 4. 点击“检查配对”，确认两侧行数一致、每行均有内容。
 5. 点击“生成 TTF 字体”，选择保存位置。
 
-工作台会自动生成临时配对数据、调用字体引擎、检查字形轮廓并输出 TTF 和同名 mapping JSON。临时 JSON 会自动清理，不需要手工创建或修改项目文件。
+工作台会自动生成临时配对数据、调用字体引擎、检查字形轮廓，并输出三份配套文件：TTF 字体、同名 `.mapping.json` 映射表、同名 `.txt` 编码文本。临时 JSON 会自动清理，不需要手工创建或修改项目文件。**要实际显示双层字形，必须把生成的 `.txt` 编码文本应用刚生成的 TTF 字体**；不能直接把原始英文/中文普通文本贴进字体后就自动叠排。
 
 ## 安装依赖
 
@@ -32,7 +32,7 @@ macOS / Windows：安装 Python 3、fontTools、Lato 和 Noto Sans CJK SC；确�
 python build_font.py --input samples/pairs.json --output dist/My-TwinLine.ttf --family "My TwinLine"
 ```
 
-输出包括 TTF 与映射表 JSON。映射表将每一对文本关联到 Unicode 私用区码位 U+E000 起始位置。
+输出包括 TTF、映射表 JSON 和可直接套用字体的 `.txt` 编码文本。每一对文本被编码为一个 Unicode 私用区字符（U+E000 起），所以必须同时使用对应 TTF 和编码文本；普通英文/中文字符本身不会自动触发组合字形。
 
 ## 在线排版预览
 
@@ -41,7 +41,7 @@ python build_font.py --input samples/pairs.json --output dist/My-TwinLine.ttf --
 ## 技术限制（必须明确）
 
 - 一个组合字形代表一对固定文本；这不是自动翻译器，也不会把任意普通英文自动翻译成中文。
-- 新文本通过工作台输入后生成新的组合字形和映射表。
+- 新文本通过工作台输入后生成新的组合字形、映射表和 PUA 编码文本；将该编码文本设置为生成字体即可显示。
 - 当前组合字形是固定轮廓，字形内部英文与中文不会像普通文本那样独立换行；长句会横向变宽。
 - 复杂脚本 shaping、双向文字与段落自动换行由上层排版器处理。
 - 派生字体受 Lato 与 Noto CJK 的 SIL Open Font License 约束，发布时需保留许可证。
