@@ -49,14 +49,35 @@ jobs:
           python tools/prepare_opensubtitles2024_gold.py \
             --output-dir data/opensubtitles2024-review \
             --max-lines-per-document 80
-      - name: Run preliminary dual-model silver benchmark
+      - name: Prepare WMT news calibration and WMT17 held-out human-review queue
+        run: |
+          python tools/prepare_wmt_gold_queue.py \
+            --output-dir data/wmt-human-review \
+            --calibration-documents 20 \
+            --max-segments-per-document 40
+      - name: Run preliminary dual-model silver benchmark on OpenSubtitles
         env:
           TOKENIZERS_PARALLELISM: "false"
         run: |
           python tools/benchmark_silver_groups.py \
             --input data/opensubtitles2024-review/annotation_queue.jsonl \
             --output reports/opensubtitles2024-silver-comparison.json \
-            --max-documents-per-split 30 \
+            --thresholds 0.30,0.35,0.40 \
+            --gap-penalties 0.06,0.12 \
+            --merge-penalties 0.02,0.06 \
+            --max-documents-per-split 20 \
+            --no-cuda
+      - name: Run preliminary dual-model silver benchmark on WMT
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          python tools/benchmark_silver_groups.py \
+            --input data/wmt-human-review/annotation_queue.jsonl \
+            --output reports/wmt17-silver-comparison.json \
+            --thresholds 0.30,0.35,0.40 \
+            --gap-penalties 0.06,0.12 \
+            --merge-penalties 0.02,0.06 \
+            --max-documents-per-split 20 \
             --no-cuda
       - name: Upload corpus manifest, human review queue and model results
         uses: actions/upload-artifact@v4
@@ -65,6 +86,9 @@ jobs:
           path: |
             data/opensubtitles2024-review/manifest.json
             data/opensubtitles2024-review/annotation_queue.jsonl
+            data/wmt-human-review/manifest.json
+            data/wmt-human-review/annotation_queue.jsonl
             reports/opensubtitles2024-silver-comparison.json
+            reports/wmt17-silver-comparison.json
           if-no-files-found: error
           retention-days: 30
