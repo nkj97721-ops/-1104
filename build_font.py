@@ -14,6 +14,7 @@ from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.cu2quPen import Cu2QuPen
 
 UPM, PUA_START, PUA_END = 2048, 0xE000, 0xF8FF
+MAX_GLYPH_ADVANCE = 65535
 MAX_PAIRS = PUA_END - PUA_START + 1
 
 
@@ -106,8 +107,14 @@ def build(pairs, output, family, encoded_output=None):
         chinese_width = draw_text(
             pair["zh"], cjk_gs, cjk_cmap, cjk_metrics, pen, 0.48, 110, missing
         )
+        advance_width = max(UPM, int(max(english_width, chinese_width) + 100))
+        if advance_width > MAX_GLYPH_ADVANCE:
+            raise ValueError(
+                f"Pair {index + 1} is too wide for a TrueType glyph ({advance_width} units). "
+                "Split this English/Chinese pair into shorter corresponding lines; the font will not be written."
+            )
         glyf[glyph_name] = pen.glyph()
-        hmtx[glyph_name] = (max(UPM, int(max(english_width, chinese_width) + 100)), 0)
+        hmtx[glyph_name] = (advance_width, 0)
         order.append(glyph_name)
 
         codepoint = PUA_START + index
