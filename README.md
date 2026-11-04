@@ -106,3 +106,27 @@ python tools/align_document.py \
 ```
 
 注意：当前句子匹配保持原文顺序，不会任意重排；句向量相似度和对齐分数都不是翻译正确概率。句子层可以识别不同数量及 1:2/2:1 分组，但真实语料准确率仍需基准测试。句级模型默认使用 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`，词级模型使用 `bert-base-multilingual-cased`；两者均在本地运行；首次下载模型后可使用缓存。
+
+## 真实平行语料准确率基准（V3）
+
+不要用手工编写的示例句子报告模型准确率。现在提供 OPUS TED2020 英中平行语料下载器和独立校准/留出测试脚本：
+
+```bash
+python tools/download_parallel_corpus.py --output data/ted2020-en-zh.tsv
+python tools/benchmark_parallel.py \
+  --input data/ted2020-en-zh.tsv \
+  --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 \
+  --block-size 20 \
+  --output reports/ted2020-minilm-benchmark.json
+```
+
+输入 TSV 每行是一条语料原生英中句对。脚本按连续句对构造文档块，先按块划分校准集和留出测试集；只在校准集上扫描 0.20–0.60 的阈值，按精确配对 F1 选择阈值，并在未参与调参的测试集上报告结果。输出逐项列出错误的 1:1 配对、1:N / N:1 合并、未匹配英文和未匹配中文。可用 `--thresholds` 指定更细的扫描网格，`--limit` 控制语料规模。
+
+**指标边界：**该基准使用语料原生句对作为 gold alignment，衡量文档级句子配对，不等同于词级/短语级翻译正确率。词级短语候选仍需独立人工标注的 gold span 才能计算精确率、召回率。不得把句级分数宣传成短语翻译准确率。语料仅下载到本地，不提交到 Git 仓库；使用或再分发前须核对 OPUS TED2020 当前许可与署名要求。
+
+运行基础回归测试：
+
+```bash
+python -m unittest discover -s tests -v
+```
+
