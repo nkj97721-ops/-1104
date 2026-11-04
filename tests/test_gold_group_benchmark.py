@@ -63,6 +63,27 @@ class GoldGroupFormatTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "human_verified"):
                 load_documents(path)
 
+    def test_rejects_movie_leakage_across_splits(self):
+        common = {
+            "annotation_status": "human_verified",
+            "annotator": "reviewer",
+            "reviewed_at": "2026-11-04T20:00:00+08:00",
+            "movie_id": "same-movie",
+            "source": ["A"],
+            "target": ["甲"],
+            "gold": [{"source": [0], "target": [0]}],
+        }
+        calibration = dict(common, id="cal", split="calibration")
+        test = dict(common, id="test", split="test")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "leak.jsonl"
+            path.write_text(
+                json.dumps(calibration) + "\n" + json.dumps(test) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "leaks across"):
+                load_documents(path)
+
     def test_prf_zero_denominators_are_safe(self):
         self.assertEqual(prf(0, 0, 0), {"precision": 0.0, "recall": 0.0, "f1": 0.0})
 
