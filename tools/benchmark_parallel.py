@@ -48,6 +48,12 @@ def build_similarity_tables(vectors: list[list[float]], n: int):
     target = target / np.maximum(np.linalg.norm(target, axis=1, keepdims=True), 1e-12)
     target_pairs = (target[:-1] + target[1:]) * 0.5
     source_pairs = (source[:-1] + source[1:]) * 0.5
+    target_pairs = target_pairs / np.maximum(
+        np.linalg.norm(target_pairs, axis=1, keepdims=True), 1e-12
+    )
+    source_pairs = source_pairs / np.maximum(
+        np.linalg.norm(source_pairs, axis=1, keepdims=True), 1e-12
+    )
     return (
         source @ target.T,
         source @ target_pairs.T,
