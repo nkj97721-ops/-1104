@@ -61,7 +61,7 @@ jobs:
           TOKENIZERS_PARALLELISM: "false"
         run: |
           python tools/benchmark_silver_groups.py \
-            --input data/opensubtitles2024-review/silver_reference.jsonl \
+            --input data/opensubtitles2024-silver/silver_reference.jsonl \
             --output reports/opensubtitles2024-silver-comparison.json \
             --thresholds 0.30,0.35,0.40 \
             --gap-penalties 0.06,0.12 \
@@ -73,7 +73,7 @@ jobs:
           TOKENIZERS_PARALLELISM: "false"
         run: |
           python tools/benchmark_silver_groups.py \
-            --input data/wmt-human-review/annotation_queue.jsonl \
+            --input data/wmt-silver/silver_reference.jsonl \
             --output reports/wmt17-silver-comparison.json \
             --thresholds 0.30,0.35,0.40 \
             --gap-penalties 0.06,0.12 \
@@ -86,10 +86,10 @@ jobs:
         with:
           name: en-zh-automatic-silver-benchmark-${{ github.run_number }}
           path: |
-            data/opensubtitles2024-review/manifest.json
-            data/opensubtitles2024-review/annotation_queue.jsonl
-            data/wmt-human-review/manifest.json
-            data/wmt-human-review/annotation_queue.jsonl
+            data/opensubtitles2024-silver/manifest.json
+            data/opensubtitles2024-silver/silver_reference.jsonl
+            data/wmt-silver/manifest.json
+            data/wmt-silver/silver_reference.jsonl
             reports/opensubtitles2024-silver-comparison.json
             reports/wmt17-silver-comparison.json
           if-no-files-found: warn
