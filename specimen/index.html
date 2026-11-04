@@ -21,6 +21,13 @@ textarea{display:block;width:100%;min-height:190px;margin-top:7px;padding:12px;b
 select{background:#171717;color:#fff;border:1px solid #444;border-radius:8px;padding:8px;min-height:36px}
 input[type=range]{width:150px;accent-color:white}
 .actions{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+.alignment-review{margin:14px 0;padding:14px;border:1px solid #343434;border-radius:10px;background:#101010}
+.alignment-review h2{font-size:15px;margin:0 0 8px}
+.alignment-meta{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+.alignment-candidates{display:grid;gap:7px;max-height:360px;overflow:auto}
+.alignment-candidate{display:flex;gap:9px;align-items:flex-start;padding:8px;border:1px solid #292929;border-radius:8px;font-size:13px;line-height:1.5}
+.alignment-candidate input{margin-top:3px;accent-color:white}
+.alignment-candidate small{display:block;color:var(--muted);font-size:11px}
 button{border:1px solid #444;border-radius:9px;background:#171717;color:#fff;padding:10px 14px;font-size:13px}
 button:active{background:#292929}
 .status{min-height:22px;color:#d5b66a;font-size:12px;line-height:1.6}.alignment-error{margin:16px 0;padding:14px;border:1px solid #744b35;border-radius:10px;background:#1b100c;color:#ffd1b8;font-size:13px;line-height:1.65}.alignment-error p{margin:0 0 6px}.alignment-error p:last-child{margin-bottom:0}
@@ -61,9 +68,17 @@ One thought, two languages, one visual unit.</textarea>
 <button id="example" type="button">恢复示例</button>
 <button id="downloadHtml" type="button">导出当前排版 HTML</button>
 <button id="downloadJson" type="button">导出 TTF 配对数据</button>
+<button id="importAlignment" type="button">导入模型对齐 JSON</button>
+<input id="alignmentFile" type="file" accept="application/json,.json" hidden>
 <button id="print" type="button">打印 / 保存 PDF</button>
 </div>
 <div class="status" id="status" role="status" aria-live="polite"></div>
+<section class="alignment-review" id="alignmentReview" hidden>
+<h2>自动语义对齐候选 · 人工确认</h2>
+<div class="alignment-meta" id="alignmentMeta"></div>
+<div class="alignment-candidates" id="alignmentCandidates"></div>
+<button id="applyAlignment" type="button" style="margin-top:10px">应用勾选的短语配对</button>
+</section>
 <section class="preview" id="preview" aria-label="双层中英排版预览"></section>
 <div class="footer">对应关系规则：逐行模式由用户明确配对；短语模式用竖线 | 显式划分短语边界，英文与中文按同一行、同一序号配对，每组短语独立排版；句子模式按顺序配对（用户需保证顺序一致）；段落模式先配对段落，再校验段内句子数量。句子数量不一致时停止导出。短语模式示例：英文输入 `take | a closer look | at the issue`，中文对应输入 `仔细 | 看一看 | 这个问题`；三个位置分别构成独立配对单元。长句内部优先在逗号、分号、冒号等分句标点处断行，其次在词边界处断行；这改善短语边界，但不替代人工语义校对。排版器不会自动翻译英文。独立 TTF 仍然是固定字形集合，普通 TTF 规范没有机制让字体自行读取任意两段文字并建立翻译关系。</div>
 </main>
@@ -111,6 +126,65 @@ function exportHtml(){
 $("example").addEventListener("click",()=>{$("english").value=sampleEn;$("chinese").value=sampleZh;$("mode").value="lines";update();});
 $("downloadHtml").addEventListener("click",exportHtml);
 $("downloadJson").addEventListener("click",exportJson);
+let alignmentCandidates=[];
+$("importAlignment").addEventListener("click",()=>$("alignmentFile").click());
+$("alignmentFile").addEventListener("change",async event=>{
+ const file=event.target.files&&event.target.files[0];
+ if(!file)return;
+ try{
+  const payload=JSON.parse(await file.text());
+  if(!Array.isArray(payload.phrase_candidates)||!payload.phrase_candidates.length)throw new Error("文件中没有 phrase_candidates。");
+  const candidates=payload.phrase_candidates.filter(item=>
+   item&&typeof item.source==="string"&&typeof item.target==="string"&&
+   Array.isArray(item.source_span)&&Array.isArray(item.target_span)&&
+   item.source_span.length===2&&item.target_span.length===2
+  );
+  if(!candidates.length)throw new Error("没有可用的短语候选。");
+  alignmentCandidates=candidates.slice(0,100);
+  const list=$("alignmentCandidates");
+  list.replaceChildren();
+  candidates.slice(0,100).forEach((item,index)=>{
+   const label=document.createElement("label");
+   label.className="alignment-candidate";
+   const checkbox=document.createElement("input");
+   checkbox.type="checkbox";checkbox.value=String(index);
+   const body=document.createElement("span");
+   const score=Number(item.score);
+   const band=item.confidence_band||"未分档";
+   body.append(document.createTextNode(item.source+"  ↔  "+item.target));
+   const detail=document.createElement("small");
+   detail.textContent="对齐分数 "+(Number.isFinite(score)?score.toFixed(3):"未知")+" · "+band+
+    " · EN "+item.source_span.join("–")+" / ZH "+item.target_span.join("–");
+   body.append(detail);label.append(checkbox,body);list.append(label);
+  });
+  $("alignmentMeta").textContent="模型："+(payload.model||"未知")+"；展示 "+Math.min(candidates.length,100)+
+   " / "+candidates.length+" 个候选。分数不是翻译正确概率；勾选前请核对上下文。";
+  $("alignmentReview").hidden=false;
+  $("status").textContent="已载入模型候选，请人工勾选不重叠的对应短语。";
+ }catch(error){$("status").textContent="导入失败："+error.message;}
+ event.target.value="";
+});
+$("applyAlignment").addEventListener("click",()=>{
+ const selected=Array.from($("alignmentCandidates").querySelectorAll("input:checked"))
+  .map(input=>$("alignmentCandidates").children[Number(input.value)])
+  .filter(Boolean)
+  .map(label=>{
+   const index=Array.from($("alignmentCandidates").children).indexOf(label);
+   return window.__twinlineAlignmentCandidates[index];
+  }).filter(Boolean);
+ if(!selected.length){$("status").textContent="先勾选至少一组候选。";return;}
+ const ordered=selected.slice().sort((a,b)=>a.source_span[0]-b.source_span[0]);
+ for(let i=1;i<ordered.length;i++){
+  const prev=ordered[i-1],current=ordered[i];
+  if(current.source_span[0]<=prev.source_span[1]||current.target_span[0]<=prev.target_span[1]){
+   $("status").textContent="所选候选存在重叠或语序交叉，请取消冲突项后再应用。";return;
+  }
+ }
+ $("english").value=ordered.map(item=>item.source).join(" | ");
+ $("chinese").value=ordered.map(item=>item.target).join(" | ");
+ $("mode").value="phrases";update();
+ $("status").textContent="已应用 "+ordered.length+" 组模型候选。请检查两侧短语语义后再导出。";
+});
 $("print").addEventListener("click",()=>window.print());
 ["english","chinese","mode","enSize","zhSize","gapSize"].forEach(id=>$(id).addEventListener("input",update));
 if(typeof ResizeObserver!=="undefined"){new ResizeObserver(()=>update()).observe($("preview"));}
