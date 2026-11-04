@@ -38,7 +38,7 @@ python tools/prepare_wmt_gold_queue.py \
 python tools/benchmark_silver_groups.py \
   --input data/opensubtitles2024-silver/silver_reference.jsonl \
   --output reports/opensubtitles2024-silver-comparison.json \
-  --max-documents-per-split 20 --no-cuda
+  --max-documents-per-split 60 --no-cuda
 
 python tools/benchmark_silver_groups.py \
   --input data/wmt-silver/silver_reference.jsonl \
@@ -51,6 +51,7 @@ python tools/benchmark_silver_groups.py \
 Each run reports:
 
 - exact-group Precision / Recall / F1;
+- parameter selection by macro F1 across available 1:1, 1:2, 2:1 and 2:2 group types;
 - separate 1:1, 1:2, 2:1 and 2:2 group metrics;
 - sentence-link Precision / Recall / F1;
 - document-cluster bootstrap 95% confidence intervals;
