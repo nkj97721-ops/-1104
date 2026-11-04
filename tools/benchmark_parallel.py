@@ -123,6 +123,7 @@ def evaluate_block(block: list[tuple[str, str]], vectors: list[list[float]],
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
         "sentence_count": n, "exact_pairs": exact,
+        "exact_match_accuracy": recall,
         "precision": precision, "recall": recall, "f1": f1,
         "errors": dict(counts), "objective_score": result["objective_score"],
         "examples": examples,
@@ -139,6 +140,7 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     r = exact / total_n if total_n else 0.0
     return {
         "blocks": len(rows), "gold_pairs": total_n, "exact_pairs": exact,
+        "exact_match_accuracy": round(r, 6),
         "precision": round(p, 6), "recall": round(r, 6),
         "f1": round(2*p*r/(p+r), 6) if p+r else 0.0,
         "errors": dict(sum((Counter(x["errors"]) for x in rows), Counter())),
@@ -167,10 +169,11 @@ def main() -> None:
     blocks = make_blocks(pairs, args.block_size)
     if len(blocks) < 5:
         raise ValueError("至少需要 5 个完整测试块，建议准备 500 条以上平行句对。")
-    order = list(range(len(blocks)))
-    random.Random(args.seed).shuffle(order)
-    dev_count = max(1, round(len(order) * 0.2))
-    dev_ids, test_ids = set(order[:dev_count]), set(order[dev_count:])
+    # Keep the source order intact: a contiguous held-out tail is less likely
+    # to share adjacent subtitle context with calibration than random blocks.
+    dev_count = max(1, round(len(blocks) * 0.2))
+    dev_ids = set(range(dev_count))
+    test_ids = set(range(dev_count, len(blocks)))
     if not test_ids:
         raise ValueError("测试集为空；请增加语料或减小 block-size。")
 
@@ -299,7 +302,17 @@ def main() -> None:
         "corpus_sentence_pairs": len(pairs),
         "block_size": args.block_size,
         "candidate_models": model_names,
-        "split": {"seed": args.seed, "dev_blocks": len(dev_ids), "test_blocks": len(test_ids)},
+        "split": {
+            "strategy": "contiguous_prefix_calibration_suffix_heldout",
+            "seed": args.seed,
+            "dev_blocks": len(dev_ids),
+            "test_blocks": len(test_ids),
+            "document_independence": (
+                "The source dataset does not expose stable movie/document IDs; "
+                "contiguous holdout reduces adjacent-block leakage but cannot prove "
+                "document-level independence."
+            ),
+        },
         "model_calibrations": model_calibrations,
         "selected_model": selected_model,
         "selected_threshold": selected_threshold,
@@ -314,7 +327,10 @@ def main() -> None:
             "are split before model/threshold selection. Model and threshold are selected "
             "using calibration blocks only; held-out blocks are evaluated once. Exact 1:1 "
             "links count as correct; wrong links, 1:n/n:1 groups, and unmatched sentences "
-            "are separately reported. This benchmark measures sentence alignment, not "
+            "are separately reported. Exact-match accuracy is exact links divided by gold pairs. "
+            "The source does not expose stable document IDs, so the contiguous held-out tail "
+            "is separated from calibration but cannot guarantee movie-level independence. "
+            "This benchmark measures sentence alignment, not "
             "word/phrase translation correctness."
         ),
     }
