@@ -32,6 +32,8 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         "excluded_oversize_groups": 0, "excluded_empty": 0,
     }
     supported_group_types = Counter()
+    all_reference_group_types = Counter()
+    excluded_group_types = Counter()
     for line in path.read_text(encoding="utf-8-sig").splitlines():
         if not line.strip():
             continue
@@ -43,11 +45,17 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         if not groups:
             counts["excluded_empty"] += 1
             continue
+        all_reference_group_types.update(
+            f"{len(g['source'])}:{len(g['target'])}" for g in groups
+        )
         supported = [
             g for g in groups
             if len(g["source"]) in (1, 2) and len(g["target"]) in (1, 2)
         ]
         oversized = [g for g in groups if g not in supported]
+        excluded_group_types.update(
+            f"{len(g['source'])}:{len(g['target'])}" for g in oversized
+        )
         counts["excluded_oversize_groups"] += len(oversized)
         supported_group_types.update(
             f'{len(g["source"])}:{len(g["target"])}' for g in supported
@@ -175,6 +183,8 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         sum((Counter(values) for values in sampled_types.values()), Counter())
     )
     counts["candidate_group_types_all_documents"] = dict(supported_group_types)
+    counts["all_reference_group_types_all_documents"] = dict(all_reference_group_types)
+    counts["excluded_group_types_all_documents"] = dict(excluded_group_types)
     return calibration + test, counts
 
 
@@ -216,6 +226,7 @@ def main() -> None:
     ap.add_argument("--thresholds", default="0.25,0.30,0.35,0.40,0.45")
     ap.add_argument("--gap-penalties", default="0.06,0.12,0.18")
     ap.add_argument("--merge-penalties", default="0.02,0.06,0.10")
+    ap.add_argument("--two-two-penalties", default="0.00,0.04,0.08,0.12,0.16")
     ap.add_argument("--max-documents-per-split", type=int, default=100)
     ap.add_argument("--no-cuda", action="store_true")
     args = ap.parse_args()
@@ -226,8 +237,9 @@ def main() -> None:
     thresholds = sorted({float(x) for x in args.thresholds.split(",")})
     gaps = sorted({float(x) for x in args.gap_penalties.split(",")})
     merges = sorted({float(x) for x in args.merge_penalties.split(",")})
+    two_two_penalties = sorted({float(x) for x in args.two_two_penalties.split(",")})
     models = list(dict.fromkeys(x.strip() for x in args.models.split(",") if x.strip()))
-    if not models or not thresholds or not gaps or not merges:
+    if not models or not thresholds or not gaps or not merges or not two_two_penalties:
         raise ValueError("Models and parameter grids must be non-empty")
 
     reports = []
@@ -247,11 +259,13 @@ def main() -> None:
         }
         clear_model_cache()
         candidates = []
-        for threshold, gap, merge in itertools.product(thresholds, gaps, merges):
+        for threshold, gap, merge, two_two in itertools.product(
+            thresholds, gaps, merges, two_two_penalties
+        ):
             rows = [
                 evaluate_document(
                     x, vectors[x["id"]], threshold, gap, merge,
-                    similarities[x["id"]],
+                    similarities[x["id"]], two_two_penalty=two_two,
                 )
                 for x in dev
             ]
@@ -259,6 +273,7 @@ def main() -> None:
                 "threshold": threshold,
                 "gap_penalty": gap,
                 "merge_penalty": merge,
+                "two_two_penalty": two_two,
                 "calibration_silver": aggregate(rows),
             })
         best = max(candidates, key=lambda x: (
@@ -270,14 +285,16 @@ def main() -> None:
             evaluate_document(
                 x, vectors[x["id"]], best["threshold"],
                 best["gap_penalty"], best["merge_penalty"],
-                similarities[x["id"]],
+                similarities[x["id"]], two_two_penalty=best["two_two_penalty"],
             )
             for x in test
         ]
         reports.append({
             "model": model,
             "selected_parameters_on_calibration_only": {
-                k: best[k] for k in ("threshold", "gap_penalty", "merge_penalty")
+                k: best[k] for k in (
+                    "threshold", "gap_penalty", "merge_penalty", "two_two_penalty"
+                )
             },
             "calibration_silver": best["calibration_silver"],
             "heldout_silver": aggregate(heldout),
