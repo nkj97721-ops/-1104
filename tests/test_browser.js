@@ -9,6 +9,25 @@ const { chromium } = require("playwright");
   const errors=[]; page.on("pageerror",e=>errors.push(e.message));
   await page.goto(pathToFileURL(path.resolve(__dirname,"../specimen/index.html")).href);
   await page.evaluate(()=>document.fonts.ready);
+  const alignmentFixture={
+   model:"fixture-model",
+   phrase_candidates:[
+    {source:"take a",target:"仔细",source_span:[0,1],target_span:[0,0],score:0.88,confidence_band:"high"},
+    {source:"closer look",target:"看一看",source_span:[2,3],target_span:[1,1],score:0.86,confidence_band:"high"}
+   ]
+  };
+  await page.locator("#alignmentFile").setInputFiles({
+   name:"alignment.json",mimeType:"application/json",
+   buffer:Buffer.from(JSON.stringify(alignmentFixture))
+  });
+  await page.waitForFunction(()=>!document.querySelector("#alignmentReview").hidden);
+  assert.equal(await page.locator("#alignmentCandidates input").count(),2);
+  await page.locator("#alignmentCandidates input").nth(0).check();
+  await page.locator("#alignmentCandidates input").nth(1).check();
+  await page.locator("#applyAlignment").click();
+  assert.equal(await page.locator("#english").inputValue(),"take a | closer look");
+  assert.equal(await page.locator("#chinese").inputValue(),"仔细 | 看一看");
+  assert.equal(await page.locator("#mode").inputValue(),"phrases");
   await page.locator("#english").fill("take | a closer look | at the issue");
   await page.locator("#chinese").fill("仔细 | 看一看 | 这个问题");
   await page.locator("#mode").selectOption("phrases");
