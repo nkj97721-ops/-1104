@@ -45,6 +45,18 @@ class SentenceAlignmentTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["source_indices"], [0, 1])
         self.assertEqual(result["matches"][0]["target_indices"], [0, 1])
 
+    def test_vectorized_similarity_tables_cover_all_four_group_shapes(self):
+        source = [[1, 0], [0, 1]]
+        target = [[1, 1], [1, 1]]
+        tables = ALIGN.build_similarity_tables(source, target)
+        self.assertEqual(len(tables), 4)
+        result = ALIGN.align_sentence_embeddings(
+            source, target, threshold=0.9, merge_penalty=0.0,
+            gap_penalty=0.2, similarity_tables=tables,
+        )
+        self.assertEqual(result["matches"][0]["source_indices"], [0, 1])
+        self.assertEqual(result["matches"][0]["target_indices"], [0, 1])
+
     def test_marks_unrelated_sentences_unmatched(self):
         result = ALIGN.align_sentence_embeddings([[1, 0]], [[-1, 0]], threshold=0.4, gap_penalty=0.1)
         self.assertEqual(result["matches"], [])
