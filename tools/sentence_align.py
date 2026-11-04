@@ -162,4 +162,4 @@ def encode_sentences(
         convert_to_numpy=True,
         normalize_embeddings=True,
     )
-    return vectors.tolist()
+    return vectors
