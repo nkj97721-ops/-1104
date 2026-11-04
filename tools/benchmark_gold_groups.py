@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .sentence_align import align_sentence_embeddings, clear_model_cache, encode_sentences
+    from .sentence_align import align_sentence_embeddings, build_similarity_tables, clear_model_cache, encode_sentences
 except ImportError:  # Direct execution: python tools/benchmark_gold_groups.py
-    from sentence_align import align_sentence_embeddings, clear_model_cache, encode_sentences
+    from sentence_align import align_sentence_embeddings, build_similarity_tables, clear_model_cache, encode_sentences
 
 
 def load_documents(
@@ -128,12 +128,14 @@ def prf(correct: int, predicted: int, gold: int) -> dict[str, float]:
 
 
 def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
-                      gap_penalty: float, merge_penalty: float) -> dict[str, Any]:
+                      gap_penalty: float, merge_penalty: float,
+                      similarity_tables=None) -> dict[str, Any]:
     source, target = doc["source"], doc["target"]
     result = align_sentence_embeddings(
         vectors[:len(source)], vectors[len(source):],
         threshold=threshold, gap_penalty=gap_penalty,
         merge_penalty=merge_penalty,
+        similarity_tables=similarity_tables,
     )
     predicted_groups = {
         (tuple(x["source_indices"]), tuple(x["target_indices"]))
@@ -285,11 +287,21 @@ def main() -> None:
             x["id"]: encode_sentences(x["source"] + x["target"], model, args.no_cuda)
             for x in docs
         }
+        similarities_by_id = {
+            x["id"]: build_similarity_tables(
+                vectors_by_id[x["id"]][:len(x["source"])],
+                vectors_by_id[x["id"]][len(x["source"]):],
+            )
+            for x in docs
+        }
         clear_model_cache()
         candidates = []
         for threshold, gap, merge in itertools.product(thresholds, gaps, merges):
             rows = [
-                evaluate_document(x, vectors_by_id[x["id"]], threshold, gap, merge)
+                evaluate_document(
+                    x, vectors_by_id[x["id"]], threshold, gap, merge,
+                    similarities_by_id[x["id"]],
+                )
                 for x in dev
             ]
             candidates.append({
@@ -309,6 +321,7 @@ def main() -> None:
             evaluate_document(
                 x, vectors_by_id[x["id"]], best["threshold"],
                 best["gap_penalty"], best["merge_penalty"],
+                similarities_by_id[x["id"]],
             )
             for x in test
         ]
