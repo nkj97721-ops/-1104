@@ -39,30 +39,41 @@ def load_silver(path: Path, max_documents: int) -> tuple[list[dict[str, Any]], d
         if not groups:
             counts["excluded_empty"] += 1
             continue
-        oversized = [
+        supported = [
             g for g in groups
-            if len(g["source"]) not in (1, 2) or len(g["target"]) not in (1, 2)
+            if len(g["source"]) in (1, 2) and len(g["target"]) in (1, 2)
         ]
-        if oversized:
-            counts["excluded_oversize"] += 1
-            counts["excluded_oversize_groups"] += len(oversized)
-            continue
+        oversized = [g for g in groups if g not in supported]
+        counts["excluded_oversize_groups"] += len(oversized)
         supported_group_types.update(
-            f'{len(g["source"])}:{len(g["target"])}' for g in groups
+            f'{len(g["source"])}:{len(g["target"])}' for g in supported
         )
+        if not supported:
+            counts["excluded_oversize"] += 1
+            continue
+
+        # Keep only sentences covered by supported silver groups or explicit
+        # upstream gaps. Oversized groups are excluded as whole regions rather
+        # than being mis-scored as unmatched sentences.
+        used_s = {i for g in supported for i in g["source"]}
+        used_t = {j for g in supported for j in g["target"]}
+        oversized_s = {i for g in oversized for i in g["source"]}
+        oversized_t = {j for g in oversized for j in g["target"]}
+        unmatched_s = set(item.get("proposed_unmatched_source", [])) - oversized_s
+        unmatched_t = set(item.get("proposed_unmatched_target", [])) - oversized_t
+        keep_s = sorted(used_s | unmatched_s)
+        keep_t = sorted(used_t | unmatched_t)
+        map_s = {old: new for new, old in enumerate(keep_s)}
+        map_t = {old: new for new, old in enumerate(keep_t)}
+        item["source"] = [item["source"][i] for i in keep_s]
+        item["target"] = [item["target"][i] for i in keep_t]
         item["_gold_groups"] = [
-            (tuple(g["source"]), tuple(g["target"])) for g in groups
+            (tuple(map_s[i] for i in g["source"]),
+             tuple(map_t[j] for j in g["target"]))
+            for g in supported
         ]
-        used_s = {i for s, t in item["_gold_groups"] for i in s}
-        used_t = {j for s, t in item["_gold_groups"] for j in t}
-        item["_gold_unmatched_source"] = sorted(
-            (set(range(len(item["source"]))) - used_s)
-            | set(item.get("proposed_unmatched_source", []))
-        )
-        item["_gold_unmatched_target"] = sorted(
-            (set(range(len(item["target"]))) - used_t)
-            | set(item.get("proposed_unmatched_target", []))
-        )
+        item["_gold_unmatched_source"] = sorted(map_s[i] for i in unmatched_s)
+        item["_gold_unmatched_target"] = sorted(map_t[j] for j in unmatched_t)
         (test if item["split"] == "test" else calibration).append(item)
 
     # Stable round-robin sampling prevents one long subtitle from consuming
