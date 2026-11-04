@@ -91,7 +91,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--input", required=True, help="UTF-8 TSV: English<TAB>Chinese, one gold pair per row")
     ap.add_argument("--output", default="alignment-benchmark.json")
-    ap.add_argument("--model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    ap.add_argument(
+        "--models",
+        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,sentence-transformers/LaBSE",
+        help="Comma-separated sentence-transformer candidates; selection uses calibration data only",
+    )
     ap.add_argument("--block-size", type=int, default=20)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--thresholds", default="0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60")
@@ -110,56 +114,87 @@ def main() -> None:
     if not test_ids:
         raise ValueError("测试集为空；请增加语料或减小 block-size。")
 
-    # Load the transformer once. Keep block boundaries intact during scoring.
-    all_texts = [x[0] for x in pairs] + [x[1] for x in pairs]
-    all_vectors = encode_sentences(all_texts, args.model, args.no_cuda)
-    pair_count = len(pairs)
-    encoded: dict[int, list[list[float]]] = {}
-    offset = 0
-    for index, block in enumerate(blocks):
-        size = len(block)
-        encoded[index] = (
-            all_vectors[offset:offset + size]
-            + all_vectors[pair_count + offset:pair_count + offset + size]
-        )
-        offset += size
-
     thresholds = sorted({float(x) for x in args.thresholds.split(",")})
     if any(not 0.0 <= x <= 1.0 for x in thresholds):
         raise ValueError("阈值必须位于 0 到 1 之间。")
-    calibration = []
-    for threshold in thresholds:
-        rows = [evaluate_block(blocks[i], encoded[i], threshold) for i in sorted(dev_ids)]
-        calibration.append({"threshold": threshold, **aggregate(rows)})
-    # Maximize exact-match F1 on calibration only; tie-break toward higher
-    # precision (conservative auto-pairing), then higher threshold.
-    chosen = max(calibration, key=lambda x: (x["f1"], x["precision"], x["threshold"]))
-    selected_threshold = chosen["threshold"]
-    heldout_rows = [
-        evaluate_block(blocks[i], encoded[i], selected_threshold) for i in sorted(test_ids)
-    ]
+
+    model_names = [x.strip() for x in args.models.split(",") if x.strip()]
+    if not model_names:
+        raise ValueError("至少指定一个句向量模型。")
+    all_texts = [x[0] for x in pairs] + [x[1] for x in pairs]
+    model_calibrations = []
+    model_vectors: dict[str, list[list[float]]] = {}
+    for model_name in model_names:
+        # One model load/encoding pass per candidate model.
+        all_vectors = encode_sentences(all_texts, model_name, args.no_cuda)
+        model_vectors[model_name] = all_vectors
+        pair_count = len(pairs)
+        encoded: dict[int, list[list[float]]] = {}
+        offset = 0
+        for index, block in enumerate(blocks):
+            size = len(block)
+            encoded[index] = (
+                all_vectors[offset:offset + size]
+                + all_vectors[pair_count + offset:pair_count + offset + size]
+            )
+            offset += size
+        calibration = []
+        for threshold in thresholds:
+            rows = [evaluate_block(blocks[i], encoded[i], threshold) for i in sorted(dev_ids)]
+            calibration.append({"threshold": threshold, **aggregate(rows)})
+        best = max(calibration, key=lambda x: (x["f1"], x["precision"], x["threshold"]))
+        model_calibrations.append({
+            "model": model_name, "threshold_results": calibration, "best_on_dev": best,
+        })
+
+    # Select model + threshold on calibration only. Prefer precision on F1 ties.
+    selected = max(
+        model_calibrations,
+        key=lambda x: (x["best_on_dev"]["f1"], x["best_on_dev"]["precision"],
+                       x["best_on_dev"]["threshold"]),
+    )
+    selected_model = selected["model"]
+    selected_threshold = selected["best_on_dev"]["threshold"]
+    selected_vectors = model_vectors[selected_model]
+    pair_count = len(pairs)
+    heldout_rows = []
+    offset = 0
+    for index, block in enumerate(blocks):
+        size = len(block)
+        if index in test_ids:
+            block_vectors = (
+                selected_vectors[offset:offset + size]
+                + selected_vectors[pair_count + offset:pair_count + offset + size]
+            )
+            heldout_rows.append(
+                evaluate_block(block, block_vectors, selected_threshold)
+            )
+        offset += size
     report = {
         "corpus": str(Path(args.input)),
         "corpus_sentence_pairs": len(pairs),
         "block_size": args.block_size,
-        "model": args.model,
+        "candidate_models": model_names,
         "split": {"seed": args.seed, "dev_blocks": len(dev_ids), "test_blocks": len(test_ids)},
-        "calibration": calibration,
+        "model_calibrations": model_calibrations,
+        "selected_model": selected_model,
         "selected_threshold": selected_threshold,
         "heldout_test": aggregate(heldout_rows),
         "heldout_block_details": heldout_rows,
         "methodology": (
             "Gold alignment is the original parallel-corpus row pairing. Contiguous blocks "
-            "are split before threshold selection. The held-out test set is not used for "
-            "threshold selection. Exact 1:1 links count as correct; wrong links, 1:n/n:1 "
-            "groups, and unmatched sentences are separately reported. This benchmark "
-            "measures sentence alignment, not word/phrase translation correctness."
+            "are split before model/threshold selection. Model and threshold are selected "
+            "using calibration blocks only; held-out blocks are evaluated once. Exact 1:1 "
+            "links count as correct; wrong links, 1:n/n:1 groups, and unmatched sentences "
+            "are separately reported. This benchmark measures sentence alignment, not "
+            "word/phrase translation correctness."
         ),
     }
     Path(args.output).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
+        "selected_model": selected_model,
         "selected_threshold": selected_threshold,
-        "calibration": {k: chosen[k] for k in ("precision", "recall", "f1", "errors")},
+        "calibration": {k: selected["best_on_dev"][k] for k in ("precision", "recall", "f1", "errors")},
         "heldout_test": report["heldout_test"],
         "output": args.output,
     }, ensure_ascii=False, indent=2))
