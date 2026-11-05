@@ -227,6 +227,8 @@ def main() -> None:
     ap.add_argument("--gap-penalties", default="0.06,0.12,0.18")
     ap.add_argument("--merge-penalties", default="0.02,0.06,0.10")
     ap.add_argument("--two-two-penalties", default="0.00,0.04,0.08,0.12,0.16")
+    ap.add_argument("--two-two-order-weights", default="0.0,0.5,1.0")
+    ap.add_argument("--group-type-regression-tolerance", type=float, default=0.02)
     ap.add_argument("--max-documents-per-split", type=int, default=100)
     ap.add_argument("--no-cuda", action="store_true")
     args = ap.parse_args()
@@ -238,9 +240,17 @@ def main() -> None:
     gaps = sorted({float(x) for x in args.gap_penalties.split(",")})
     merges = sorted({float(x) for x in args.merge_penalties.split(",")})
     two_two_penalties = sorted({float(x) for x in args.two_two_penalties.split(",")})
+    two_two_order_weights = sorted({float(x) for x in args.two_two_order_weights.split(",")})
     models = list(dict.fromkeys(x.strip() for x in args.models.split(",") if x.strip()))
-    if not models or not thresholds or not gaps or not merges or not two_two_penalties:
+    if (not models or not thresholds or not gaps or not merges or not two_two_penalties
+            or not two_two_order_weights):
         raise ValueError("Models and parameter grids must be non-empty")
+    if (any(not math.isfinite(x) or x < 0 for x in two_two_order_weights)
+            or not math.isfinite(args.group_type_regression_tolerance)
+            or not 0 <= args.group_type_regression_tolerance <= 1):
+        raise ValueError("Invalid 2:2 order weight or group-type regression tolerance")
+    if 0.0 not in two_two_order_weights:
+        raise ValueError("two-two-order-weights must include 0.0 as the baseline")
 
     reports = []
     for model in models:
@@ -259,13 +269,14 @@ def main() -> None:
         }
         clear_model_cache()
         candidates = []
-        for threshold, gap, merge, two_two in itertools.product(
-            thresholds, gaps, merges, two_two_penalties
+        for threshold, gap, merge, two_two, order_weight in itertools.product(
+            thresholds, gaps, merges, two_two_penalties, two_two_order_weights
         ):
             rows = [
                 evaluate_document(
                     x, vectors[x["id"]], threshold, gap, merge,
                     similarities[x["id"]], two_two_penalty=two_two,
+                    two_two_order_weight=order_weight,
                 )
                 for x in dev
             ]
@@ -274,15 +285,45 @@ def main() -> None:
                 "gap_penalty": gap,
                 "merge_penalty": merge,
                 "two_two_penalty": two_two,
+                "two_two_order_weight": order_weight,
                 "calibration_silver": aggregate(rows),
             })
-        best = max(candidates, key=lambda x: (
+        baseline_candidates = [x for x in candidates if x["two_two_order_weight"] == 0.0]
+        baseline = max(baseline_candidates, key=lambda x: (
             x["calibration_silver"]["macro_group_type_f1"] or 0.0,
             x["calibration_silver"]["group"]["f1"],
             x["calibration_silver"]["link"]["f1"],
         ))
-        # Separate semantic-link calibration from original boundary-group calibration.
-        best_semantic = max(candidates, key=lambda x: (
+        baseline_types = baseline["calibration_silver"]["group_type"]
+        protected_types = {
+            group_type: metrics["f1"]
+            for group_type, metrics in baseline_types.items()
+            if group_type != "2:2" and metrics.get("status") == "ESTIMATED"
+        }
+        eligible = []
+        for candidate in candidates:
+            candidate_types = candidate["calibration_silver"]["group_type"]
+            if all(
+                candidate_types.get(group_type, {}).get("status") == "ESTIMATED"
+                and candidate_types[group_type]["f1"] >= baseline_f1 - args.group_type_regression_tolerance
+                for group_type, baseline_f1 in protected_types.items()
+            ):
+                eligible.append(candidate)
+        baseline_two_two = baseline_types.get("2:2", {}).get("f1")
+        best = baseline
+        if eligible and baseline_two_two is not None:
+            best_constrained = max(eligible, key=lambda x: (
+                x["calibration_silver"]["group_type"].get("2:2", {}).get("f1") or 0.0,
+                x["calibration_silver"]["macro_group_type_f1"] or 0.0,
+                x["calibration_silver"]["group"]["f1"],
+                x["calibration_silver"]["link"]["f1"],
+            ))
+            candidate_two_two = best_constrained["calibration_silver"]["group_type"].get("2:2", {}).get("f1") or 0.0
+            if candidate_two_two > baseline_two_two:
+                best = best_constrained
+        # Semantic-link tuning excludes the new 2:2 bonus: 2:2 boundaries have
+        # no sentence-level semantic gold links and must not affect this track.
+        best_semantic = max(baseline_candidates, key=lambda x: (
             x["calibration_silver"]["semantic_link"]["f1"] or 0.0,
             x["calibration_silver"]["semantic_link"]["precision"] or 0.0,
             x["calibration_silver"]["link"]["f1"],
@@ -292,6 +333,7 @@ def main() -> None:
                 x, vectors[x["id"]], best["threshold"],
                 best["gap_penalty"], best["merge_penalty"],
                 similarities[x["id"]], two_two_penalty=best["two_two_penalty"],
+                two_two_order_weight=best["two_two_order_weight"],
             )
             for x in test
         ]
@@ -300,6 +342,7 @@ def main() -> None:
                 x, vectors[x["id"]], best_semantic["threshold"],
                 best_semantic["gap_penalty"], best_semantic["merge_penalty"],
                 similarities[x["id"]], two_two_penalty=best_semantic["two_two_penalty"],
+                two_two_order_weight=best_semantic["two_two_order_weight"],
             )
             for x in test
         ]
@@ -307,20 +350,42 @@ def main() -> None:
             "model": model,
             "selected_parameters_on_calibration_only": {
                 k: best[k] for k in (
-                    "threshold", "gap_penalty", "merge_penalty", "two_two_penalty"
+                    "threshold", "gap_penalty", "merge_penalty", "two_two_penalty",
+                    "two_two_order_weight"
                 )
             },
             "calibration_silver": best["calibration_silver"],
             "heldout_silver": aggregate(heldout),
+            "calibration_selection_diagnostics": {
+                "baseline_without_order_bonus": {
+                    "parameters": {
+                        k: baseline[k] for k in (
+                            "threshold", "gap_penalty", "merge_penalty", "two_two_penalty",
+                            "two_two_order_weight"
+                        )
+                    },
+                    "group_type": baseline_types,
+                },
+                "selected_group_type": best["calibration_silver"]["group_type"],
+                "protected_group_types": protected_types,
+                "maximum_allowed_regression": args.group_type_regression_tolerance,
+                "selection_status": (
+                    "2:2_IMPROVED_WITH_PROTECTED_TYPES_WITHIN_TOLERANCE"
+                    if best is not baseline else "NO_SAFE_2:2_IMPROVEMENT_FOUND_BASELINE_RETAINED"
+                ),
+            },
             "semantic_parameters_on_calibration_only": {
                 k: best_semantic[k] for k in (
-                    "threshold", "gap_penalty", "merge_penalty", "two_two_penalty"
+                    "threshold", "gap_penalty", "merge_penalty", "two_two_penalty",
+                    "two_two_order_weight"
                 )
             },
             "semantic_calibration_silver": best_semantic["calibration_silver"],
             "semantic_heldout_silver": aggregate(semantic_heldout),
+            "semantic_heldout_confidence_intervals_95": bootstrap_confidence_intervals(semantic_heldout),
             "heldout_confidence_intervals_95": bootstrap_confidence_intervals(heldout),
             "heldout_document_errors": heldout,
+            "semantic_heldout_document_errors": semantic_heldout,
             "parameter_grid": candidates,
         })
 
@@ -328,6 +393,12 @@ def main() -> None:
         "status": "AUTOMATIC_SILVER_REFERENCE_EVALUATION_NOT_HUMAN_GOLD",
         "reference_type": "Upstream automatic segment/subtitle alignment proposals; weak reference, not human-verified semantic gold",
         "evaluation_tracks": {
+            "two_two_order_evidence": (
+                "A non-negative order bonus may raise the pooled 2:2 score only when the mean "
+                "diagonal sentence-pair cosine is stronger; it never lowers the pooled score. "
+                "The bonus is calibrated on calibration documents only and is selected only if "
+                "1:1, 1:2 and 2:1 F1 each remain within the configured regression tolerance."
+            ),
             "semantic_sentence_links": (
                 "The new semantic_link F1 scores only sentence regions outside 2:2 reference blocks. "
                 "It uses 1:1, 1:2 and 2:1 weak silver links; 2:2 blocks are excluded because "
@@ -358,6 +429,12 @@ def main() -> None:
         "split_unit": "whole movie IDs; no movie appears in both calibration and held-out splits",
         "counts": counts,
         "model_comparisons": reports,
+        "selection_policy": (
+            "The boundary track first selects a zero-order-bonus baseline on calibration data. "
+            "A 2:2 order bonus is adopted only when it improves calibration 2:2 F1 while keeping "
+            "each estimable non-2:2 group type within the configured regression tolerance. "
+            "The semantic-link track is calibrated separately with order bonus fixed at zero."
+        ),
         "evaluation_policy": "Fully automatic; no human annotation or adjudication is required to run this benchmark.",
         "warning": (
             "These scores measure agreement with automatic upstream alignment proposals, not verified semantic alignment. "
@@ -377,6 +454,8 @@ def main() -> None:
                 "parameters": x["selected_parameters_on_calibration_only"],
                 "calibration_silver": x["calibration_silver"],
                 "heldout_silver": x["heldout_silver"],
+                "semantic_heldout_silver": x["semantic_heldout_silver"],
+                "calibration_selection_diagnostics": x["calibration_selection_diagnostics"],
                 "heldout_confidence_intervals_95": x["heldout_confidence_intervals_95"],
             }
             for x in reports
