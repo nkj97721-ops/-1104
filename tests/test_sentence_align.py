@@ -117,11 +117,12 @@ class SentenceAlignmentTests(unittest.TestCase):
             )
 
 
-    def test_vectorized_similarity_tables_cover_all_four_group_shapes(self):
+    def test_vectorized_similarity_tables_include_order_aware_two_two_scores(self):
         source = [[1, 0], [0, 1]]
         target = [[1, 1], [1, 1]]
         tables = ALIGN.build_similarity_tables(source, target)
         self.assertEqual(len(tables), 5)
+        self.assertEqual(tuple(tables[4].shape), (1, 1))
         result = ALIGN.align_sentence_embeddings(
             source, target, threshold=0.9, merge_penalty=0.0,
             gap_penalty=0.2, similarity_tables=tables,
