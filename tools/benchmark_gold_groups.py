@@ -174,7 +174,8 @@ def semantic_link_counts(
 def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
                       gap_penalty: float, merge_penalty: float,
                       similarity_tables=None,
-                      two_two_penalty: float | None = None) -> dict[str, Any]:
+                      two_two_penalty: float | None = None,
+                      two_two_order_weight: float = 0.0) -> dict[str, Any]:
     source, target = doc["source"], doc["target"]
     result = align_sentence_embeddings(
         vectors[:len(source)], vectors[len(source):],
@@ -182,6 +183,7 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
         merge_penalty=merge_penalty,
         similarity_tables=similarity_tables,
         two_two_penalty=two_two_penalty,
+        two_two_order_weight=two_two_order_weight,
     )
     predicted_groups = {
         (tuple(x["source_indices"]), tuple(x["target_indices"]))
