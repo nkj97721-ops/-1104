@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.benchmark_gold_groups import aggregate, load_documents, prf
+from tools.benchmark_gold_groups import aggregate, load_documents, prf, semantic_link_counts
 
 
 class GoldGroupFormatTests(unittest.TestCase):
@@ -99,6 +99,26 @@ class GoldGroupFormatTests(unittest.TestCase):
         self.assertAlmostEqual(result["group_type"]["1:1"]["recall"], 1.0)
         self.assertEqual(result["unmatched"]["status"], "NOT_ESTIMABLE_NO_REFERENCE_UNMATCHED")
         self.assertIsNone(result["unmatched"]["f1"])
+
+    def test_semantic_links_exclude_ambiguous_two_two_boundary_blocks(self):
+        predicted = {
+            ((0,), (0,)),
+            ((1,), (1,)),
+            ((2, 3), (2, 3)),
+        }
+        gold = {
+            ((0,), (0,)),
+            ((1, 2), (1,)),
+            ((3, 4), (3, 4)),
+        }
+        result = semantic_link_counts(predicted, gold, 5, 5)
+        # Source 3,4 and target 3,4 belong to a 2:2 boundary block and are
+        # deliberately excluded from semantic-link scoring.
+        self.assertEqual(result["eligible_source_sentences"], 3)
+        self.assertEqual(result["eligible_target_sentences"], 3)
+        self.assertEqual(result["reference"], 3)
+        self.assertEqual(result["predicted"], 3)
+        self.assertEqual(result["correct"], 2)
 
     def test_prf_zero_denominators_are_safe(self):
         self.assertEqual(prf(0, 0, 0), {"precision": 0.0, "recall": 0.0, "f1": 0.0})
