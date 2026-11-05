@@ -61,15 +61,19 @@ def build_similarity_tables(source_vectors, target_vectors):
     target_pairs = target_pairs / np.maximum(
         np.linalg.norm(target_pairs, axis=1, keepdims=True), 1e-12
     )
-    # A 2:2 transition represents the joint meaning of both adjacent sentences.
-    # Keep the original pooled score: the order-aware blend reduced held-out
-    # 2:2 recall on both models in the latest real-corpus comparison.
+    # Keep holistic pair meaning and order-preserving pair evidence separate.
+    # The aligner can apply an asymmetric bonus only when ordered evidence is
+    # stronger than pooled meaning; weak order evidence never suppresses recall.
     two_two = source_pairs @ target_pairs.T
+    two_two_order = 0.5 * (
+        source[:-1] @ target[:-1].T + source[1:] @ target[1:].T
+    )
     return tuple(np.clip(table, -1.0, 1.0) for table in (
         source @ target.T,
         source @ target_pairs.T,
         source_pairs @ target.T,
         two_two,
+        two_two_order,
     ))
 
 
@@ -81,6 +85,7 @@ def align_sentence_embeddings(
     merge_penalty: float = 0.06,
     similarity_tables=None,
     two_two_penalty: float | None = None,
+    two_two_order_weight: float = 0.0,
 ) -> dict:
     """Globally align sentence vectors with monotonic 1:1, 1:2, 2:1 and 2:2 transitions.
 
@@ -111,6 +116,8 @@ def align_sentence_embeddings(
         two_two_penalty = 2.0 * merge_penalty
     if not math.isfinite(two_two_penalty) or two_two_penalty < 0:
         raise ValueError("two_two_penalty must be finite and non-negative")
+    if not math.isfinite(two_two_order_weight) or two_two_order_weight < 0:
+        raise ValueError("two_two_order_weight must be finite and non-negative")
 
     n, m = len(source_vectors), len(target_vectors)
     vectors = list(source_vectors) + list(target_vectors)
@@ -121,12 +128,14 @@ def align_sentence_embeddings(
         raise ValueError("Sentence vectors must contain only finite values")
 
     if similarity_tables is not None:
-        if len(similarity_tables) not in (3, 4):
-            raise ValueError("Three or four similarity tables are required")
+        if len(similarity_tables) not in (3, 4, 5):
+            raise ValueError("Three, four or five similarity tables are required")
         expected_shapes = [
             (n, m), (n, max(0, m - 1)), (max(0, n - 1), m),
         ]
-        if len(similarity_tables) == 4:
+        if len(similarity_tables) >= 4:
+            expected_shapes.append((max(0, n - 1), max(0, m - 1)))
+        if len(similarity_tables) == 5:
             expected_shapes.append((max(0, n - 1), max(0, m - 1)))
         for table, expected in zip(similarity_tables, expected_shapes):
             shape = getattr(table, "shape", None)
@@ -177,9 +186,19 @@ def align_sentence_embeddings(
             if i + 1 < n and j + 1 < m:
                 score = (
                     float(similarity_tables[3][i][j])
-                    if similarity_tables is not None and len(similarity_tables) == 4
+                    if similarity_tables is not None and len(similarity_tables) >= 4
                     else cosine(mean(source_vectors[i:i + 2]), mean(target_vectors[j:j + 2]))
                 )
+                if two_two_order_weight > 0:
+                    if similarity_tables is not None and len(similarity_tables) == 5:
+                        order_score = float(similarity_tables[4][i][j])
+                    else:
+                        order_score = 0.5 * (
+                            cosine(source_vectors[i], target_vectors[j])
+                            + cosine(source_vectors[i + 1], target_vectors[j + 1])
+                        )
+                    # Only positive order evidence can lift the pooled score.
+                    score = min(1.0, score + two_two_order_weight * max(0.0, order_score - score))
                 transitions.append((2, 2, score, two_two_penalty))
 
             for take_source, take_target, similarity, penalty in transitions:
