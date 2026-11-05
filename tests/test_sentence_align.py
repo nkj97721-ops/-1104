@@ -83,11 +83,45 @@ class SentenceAlignmentTests(unittest.TestCase):
                 [[1, 0], [0, 1]], [[1, 0], [0, 1]], two_two_penalty=-0.1
             )
 
+    def test_two_two_order_bonus_can_rescue_pooled_score_without_changing_other_transitions(self):
+        source = [[1.0, 0.0], [0.0, 1.0]]
+        target = [[1.0, 0.0], [0.0, 1.0]]
+        tables = (
+            [[0.0, 0.0], [0.0, 0.0]],
+            [[0.0], [0.0]],
+            [[0.0, 0.0]],
+            [[0.1]],
+            [[0.8]],
+        )
+        without_bonus = ALIGN.align_sentence_embeddings(
+            source, target, threshold=0.5, gap_penalty=0.01,
+            merge_penalty=0.0, two_two_penalty=0.0,
+            similarity_tables=tables, two_two_order_weight=0.0,
+        )
+        with_bonus = ALIGN.align_sentence_embeddings(
+            source, target, threshold=0.5, gap_penalty=0.01,
+            merge_penalty=0.0, two_two_penalty=0.0,
+            similarity_tables=tables, two_two_order_weight=1.0,
+        )
+        self.assertEqual(without_bonus["matches"], [])
+        self.assertEqual(
+            [(m["source_indices"], m["target_indices"]) for m in with_bonus["matches"]],
+            [([0, 1], [0, 1])],
+        )
+        self.assertAlmostEqual(with_bonus["matches"][0]["similarity"], 0.8)
+
+    def test_rejects_invalid_two_two_order_weight(self):
+        with self.assertRaisesRegex(ValueError, "two_two_order_weight"):
+            ALIGN.align_sentence_embeddings(
+                [[1, 0], [0, 1]], [[1, 0], [0, 1]], two_two_order_weight=-0.1
+            )
+
+
     def test_vectorized_similarity_tables_cover_all_four_group_shapes(self):
         source = [[1, 0], [0, 1]]
         target = [[1, 1], [1, 1]]
         tables = ALIGN.build_similarity_tables(source, target)
-        self.assertEqual(len(tables), 4)
+        self.assertEqual(len(tables), 5)
         result = ALIGN.align_sentence_embeddings(
             source, target, threshold=0.9, merge_penalty=0.0,
             gap_penalty=0.2, similarity_tables=tables,
