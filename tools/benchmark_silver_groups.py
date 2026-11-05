@@ -281,11 +281,25 @@ def main() -> None:
             x["calibration_silver"]["group"]["f1"],
             x["calibration_silver"]["link"]["f1"],
         ))
+        # Separate semantic-link calibration from original boundary-group calibration.
+        best_semantic = max(candidates, key=lambda x: (
+            x["calibration_silver"]["semantic_link"]["f1"] or 0.0,
+            x["calibration_silver"]["semantic_link"]["precision"] or 0.0,
+            x["calibration_silver"]["link"]["f1"],
+        ))
         heldout = [
             evaluate_document(
                 x, vectors[x["id"]], best["threshold"],
                 best["gap_penalty"], best["merge_penalty"],
                 similarities[x["id"]], two_two_penalty=best["two_two_penalty"],
+            )
+            for x in test
+        ]
+        semantic_heldout = [
+            evaluate_document(
+                x, vectors[x["id"]], best_semantic["threshold"],
+                best_semantic["gap_penalty"], best_semantic["merge_penalty"],
+                similarities[x["id"]], two_two_penalty=best_semantic["two_two_penalty"],
             )
             for x in test
         ]
@@ -298,6 +312,13 @@ def main() -> None:
             },
             "calibration_silver": best["calibration_silver"],
             "heldout_silver": aggregate(heldout),
+            "semantic_parameters_on_calibration_only": {
+                k: best_semantic[k] for k in (
+                    "threshold", "gap_penalty", "merge_penalty", "two_two_penalty"
+                )
+            },
+            "semantic_calibration_silver": best_semantic["calibration_silver"],
+            "semantic_heldout_silver": aggregate(semantic_heldout),
             "heldout_confidence_intervals_95": bootstrap_confidence_intervals(heldout),
             "heldout_document_errors": heldout,
             "parameter_grid": candidates,
@@ -308,8 +329,17 @@ def main() -> None:
         "reference_type": "Upstream automatic segment/subtitle alignment proposals; weak reference, not human-verified semantic gold",
         "evaluation_tracks": {
             "semantic_sentence_links": (
-                "Link F1 measures sentence-pair connectivity from embedding-only predictions; "
-                "it does not determine original subtitle/segment grouping."
+                "The new semantic_link F1 scores only sentence regions outside 2:2 reference blocks. "
+                "It uses 1:1, 1:2 and 2:1 weak silver links; 2:2 blocks are excluded because "
+                "their segment boundaries do not specify individual sentence-to-sentence links."
+            ),
+            "boundary_implied_link_connectivity": (
+                "The legacy link F1 expands each upstream group as a Cartesian product, including "
+                "2:2 groups. It is boundary-implied connectivity agreement, not independent semantic-link accuracy."
+            ),
+            "semantic_2_2_alignment": (
+                "NOT_ESTIMABLE_WITHOUT_INDEPENDENT_REFERENCE: automatic 2:2 segment boundaries do not "
+                "identify the sentence-level correspondence pattern inside each block."
             ),
             "original_boundary_grouping": (
                 "Exact group F1 measures agreement with upstream paired line/segment boundaries. "
