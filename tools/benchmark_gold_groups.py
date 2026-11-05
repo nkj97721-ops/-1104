@@ -127,6 +127,50 @@ def prf(correct: int, predicted: int, gold: int) -> dict[str, float]:
     return {"precision": p, "recall": r, "f1": f1(p, r)}
 
 
+def semantic_link_counts(
+    predicted_groups: set[tuple[tuple[int, ...], tuple[int, ...]]],
+    gold_groups: set[tuple[tuple[int, ...], tuple[int, ...]]],
+    source_count: int,
+    target_count: int,
+) -> dict[str, int]:
+    """Score sentence links only where the silver reference is unambiguous.
+
+    A 2:2 upstream segment group identifies a paired block, not the individual
+    sentence-to-sentence links inside that block. Exclude every sentence in
+    such a block from semantic-link scoring instead of inventing a Cartesian
+    semantic gold mapping.
+    """
+    ambiguous_source = {
+        index for si, ti in gold_groups if len(si) == 2 and len(ti) == 2
+        for index in si
+    }
+    ambiguous_target = {
+        index for si, ti in gold_groups if len(si) == 2 and len(ti) == 2
+        for index in ti
+    }
+    eligible_source = set(range(source_count)) - ambiguous_source
+    eligible_target = set(range(target_count)) - ambiguous_target
+    predicted_links = {
+        (i, j)
+        for si, ti in predicted_groups
+        for i in si for j in ti
+        if i in eligible_source and j in eligible_target
+    }
+    gold_links = {
+        (i, j)
+        for si, ti in gold_groups
+        if not (len(si) == 2 and len(ti) == 2)
+        for i in si for j in ti
+    }
+    return {
+        "correct": len(predicted_links & gold_links),
+        "predicted": len(predicted_links),
+        "reference": len(gold_links),
+        "eligible_source_sentences": len(eligible_source),
+        "eligible_target_sentences": len(eligible_target),
+    }
+
+
 def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
                       gap_penalty: float, merge_penalty: float,
                       similarity_tables=None,
@@ -148,6 +192,9 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
     predicted_links = {(i, j) for si, ti in predicted_groups for i in si for j in ti}
     gold_links = {(i, j) for si, ti in gold_groups for i in si for j in ti}
     link_correct = len(predicted_links & gold_links)
+    semantic_links = semantic_link_counts(
+        predicted_groups, gold_groups, len(source), len(target)
+    )
     pred_unmatched_s = set(result["unmatched_source"])
     pred_unmatched_t = set(result["unmatched_target"])
     gold_unmatched_s = set(doc["_gold_unmatched_source"])
@@ -214,6 +261,7 @@ def evaluate_document(doc: dict[str, Any], vectors: Any, threshold: float,
         "predicted_links": len(predicted_links),
         "correct_links": link_correct,
         "link": prf(link_correct, len(predicted_links), len(gold_links)),
+        "semantic_link_counts": semantic_links,
         "gold_unmatched": unmatched_gold,
         "predicted_unmatched": unmatched_predicted,
         "correct_unmatched": unmatched_correct,
@@ -258,6 +306,10 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
                     "correct_links", "predicted_links", "gold_links",
                     "correct_unmatched", "predicted_unmatched", "gold_unmatched"):
             sums[key] += row[key]
+        semantic = row.get("semantic_link_counts", {})
+        for key in ("correct", "predicted", "reference",
+                    "eligible_source_sentences", "eligible_target_sentences"):
+            sums[f"semantic_{key}"] += semantic.get(key, 0)
         for group_type, counts in row.get("group_type_counts", {}).items():
             bucket = type_sums.setdefault(group_type, Counter())
             for key in ("correct", "predicted", "reference"):
@@ -297,6 +349,14 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "group_type": group_type_metrics,
         "macro_group_type_f1": macro_group_type_f1,
         "link": prf(sums["correct_links"], sums["predicted_links"], sums["gold_links"]),
+        "semantic_link": (
+            {"status": "NOT_ESTIMABLE_NO_UNAMBIGUOUS_REFERENCE_LINKS",
+             "precision": None, "recall": None, "f1": None}
+            if sums["semantic_reference"] == 0
+            else {"status": "ESTIMATED", **prf(
+                sums["semantic_correct"], sums["semantic_predicted"], sums["semantic_reference"]
+            )}
+        ),
         "unmatched": unmatched_metrics,
         "counts": dict(sums),
     }
