@@ -195,12 +195,21 @@ def bootstrap_confidence_intervals(rows: list[dict[str, Any]], samples: int = 20
     if len(rows) < 2:
         return {"status": "INSUFFICIENT_DOCUMENTS", "documents": len(rows)}
     rng = random.Random(seed)
-    group_scores, link_scores = [], []
+    group_scores, link_scores, semantic_scores = [], [], []
+    type_scores: dict[str, list[float]] = {}
+    type_valid_samples: Counter[str] = Counter()
     for _ in range(samples):
         sample = [rows[rng.randrange(len(rows))] for _ in rows]
         metrics = aggregate(sample)
         group_scores.append(metrics["group"]["f1"])
         link_scores.append(metrics["link"]["f1"])
+        semantic = metrics["semantic_link"]
+        if semantic.get("status") == "ESTIMATED":
+            semantic_scores.append(semantic["f1"])
+        for group_type, type_metric in metrics["group_type"].items():
+            if type_metric.get("status") == "ESTIMATED":
+                type_scores.setdefault(group_type, []).append(type_metric["f1"])
+                type_valid_samples[group_type] += 1
     def interval(values: list[float]) -> dict[str, float]:
         ordered = sorted(values)
         low = ordered[int(0.025 * (len(ordered) - 1))]
@@ -211,7 +220,18 @@ def bootstrap_confidence_intervals(rows: list[dict[str, Any]], samples: int = 20
         "samples": samples,
         "documents": len(rows),
         "group_f1": interval(group_scores),
+        "group_type_f1": {
+            group_type: {
+                **interval(values),
+                "valid_resamples": type_valid_samples[group_type],
+                "requested_resamples": samples,
+            }
+            for group_type, values in sorted(type_scores.items())
+        },
         "link_f1": interval(link_scores),
+        "semantic_link_f1": interval(semantic_scores) if semantic_scores else {
+            "status": "NOT_ESTIMABLE"
+        },
         "macro_document_group_f1": mean(row["group"]["f1"] for row in rows),
     }
 
