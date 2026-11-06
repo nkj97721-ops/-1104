@@ -2,7 +2,7 @@ name: Real corpus alignment benchmark
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/dual-track-2x2-evidence]
     paths:
       - "tools/**"
       - "tests/**"
@@ -56,6 +56,15 @@ jobs:
             --output-dir data/wmt-silver \
             --calibration-documents 20 \
             --max-segments-per-document 40
+      - name: Diagnose ordered 1:1 candidates inside held-out OpenSubtitles 2:2 groups
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          python tools/benchmark_two_two_candidates.py \\
+            --input data/opensubtitles2024-silver/silver_reference.jsonl \\
+            --output reports/opensubtitles2024-two-two-candidates.json \\
+            --threshold 0.35 \\
+            --no-cuda
       - name: Run dual-model automatic silver benchmark on OpenSubtitles
         env:
           TOKENIZERS_PARALLELISM: "false"
@@ -92,7 +101,7 @@ jobs:
             data/opensubtitles2024-silver/silver_reference.jsonl
             data/wmt-silver/manifest.json
             data/wmt-silver/silver_reference.jsonl
-            reports/opensubtitles2024-silver-comparison.json
+            reports/opensubtitles2024-two-two-candidates.json\n            reports/opensubtitles2024-silver-comparison.json
             reports/wmt17-silver-comparison.json
           if-no-files-found: warn
           retention-days: 30
