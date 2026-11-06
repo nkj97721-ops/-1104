@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from tools.align_document import build_two_two_pair_evidence
+from tools.align_document import align_document, build_two_two_pair_evidence
 
 
 class TwoTwoPairEvidenceTests(unittest.TestCase):
@@ -44,6 +45,50 @@ class TwoTwoPairEvidenceTests(unittest.TestCase):
             ["A."], ["甲。"], [[1.0, 0.0]], [[1.0, 0.0]], threshold=0.3,
         )
         self.assertIsNone(result)
+
+    @patch("tools.align_document.align_text_batch")
+    @patch("tools.align_document.align_sentence_embeddings")
+    @patch("tools.align_document.encode_sentences")
+    def test_document_output_keeps_boundary_track_separate_from_candidates(
+        self, encode_mock, sentence_align_mock, word_align_mock
+    ):
+        encode_mock.return_value = [
+            [1.0, 0.0], [0.0, 1.0],
+            [0.99, 0.01], [0.02, 0.98],
+        ]
+        sentence_align_mock.return_value = {
+            "matches": [{
+                "source_indices": [0, 1],
+                "target_indices": [0, 1],
+                "similarity": 0.91,
+                "source_count": 2,
+                "target_count": 2,
+            }],
+            "unmatched_source": [],
+            "unmatched_target": [],
+        }
+        word_align_mock.return_value = [{
+            "source_tokens": ["First", "Second"],
+            "target_tokens": ["第一", "第二"],
+            "links": [],
+            "phrase_candidates": [],
+        }]
+
+        result = align_document("First English. Second English.", "第一句。第二句。")
+
+        self.assertEqual(len(result["boundary_groups"]), 1)
+        self.assertEqual(result["boundary_groups"][0]["source_count"], 2)
+        self.assertEqual(result["boundary_groups"][0]["target_count"], 2)
+        self.assertEqual(len(result["semantic_pair_candidates"]), 1)
+        self.assertEqual(
+            [(p["source_index"], p["target_index"])
+             for p in result["semantic_pair_candidates"][0]["ordered_pair_candidates"]],
+            [(0, 0), (1, 1)],
+        )
+        self.assertEqual(result["summary"]["two_two_boundary_groups"], 1)
+        self.assertEqual(
+            result["summary"]["two_two_groups_with_two_ordered_pair_candidates"], 1
+        )
 
 
 if __name__ == "__main__":
