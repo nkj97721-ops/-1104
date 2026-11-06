@@ -78,6 +78,11 @@ jobs:
             --two-two-penalties 0.00,0.04,0.08,0.12,0.16 \
             --max-documents-per-split 40 \
             --no-cuda
+      - name: Diagnose original boundary groups versus predicted sentence groupings
+        run: |
+          python tools/diagnose_boundary_decomposition.py \
+            --input reports/opensubtitles2024-silver-comparison.json \
+            --output reports/opensubtitles2024-boundary-decomposition.json
       - name: Run dual-model automatic silver benchmark on WMT
         env:
           TOKENIZERS_PARALLELISM: "false"
@@ -103,6 +108,7 @@ jobs:
             data/wmt-silver/silver_reference.jsonl
             reports/opensubtitles2024-two-two-candidates.json
             reports/opensubtitles2024-silver-comparison.json
+            reports/opensubtitles2024-boundary-decomposition.json
             reports/wmt17-silver-comparison.json
           if-no-files-found: warn
           retention-days: 30
