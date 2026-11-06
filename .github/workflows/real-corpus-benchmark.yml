@@ -60,10 +60,10 @@ jobs:
         env:
           TOKENIZERS_PARALLELISM: "false"
         run: |
-          python tools/benchmark_two_two_candidates.py \\
-            --input data/opensubtitles2024-silver/silver_reference.jsonl \\
-            --output reports/opensubtitles2024-two-two-candidates.json \\
-            --threshold 0.35 \\
+          python tools/benchmark_two_two_candidates.py \
+            --input data/opensubtitles2024-silver/silver_reference.jsonl \
+            --output reports/opensubtitles2024-two-two-candidates.json \
+            --threshold 0.35 \
             --no-cuda
       - name: Run dual-model automatic silver benchmark on OpenSubtitles
         env:
