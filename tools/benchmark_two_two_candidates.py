@@ -104,7 +104,7 @@ def summarize_model(groups: list[dict[str, Any]], model: str, threshold: float,
                 "pairs_over_threshold": sum(x >= threshold for x in diagonal),
                 "threshold": threshold,
             })
-        clear_model_cache()
+    clear_model_cache()
 
     both = sum(x["pairs_over_threshold"] == 2 for x in results)
     one = sum(x["pairs_over_threshold"] == 1 for x in results)
@@ -140,6 +140,7 @@ def summarize_model(groups: list[dict[str, Any]], model: str, threshold: float,
             "mean": round(mean(margins), 6) if margins else None,
             "median": round(median(margins), 6) if margins else None,
         },
+        "all_group_diagnostics": results,
         "hardest_or_most_ambiguous_examples": difficult,
         "interpretation": (
             "Embedding evidence for monotonic ordered 1:1 candidates only. "
