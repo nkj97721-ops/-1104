@@ -49,18 +49,29 @@ class TwoTwoCandidateBenchmarkTests(unittest.TestCase):
         encode.return_value = [
             [1.0, 0.0], [0.0, 1.0],
             [0.9, 0.1], [0.1, 0.9],
+            [1.0, 0.0], [0.0, 1.0],
+            [0.9, 0.1], [0.1, 0.9],
         ]
-        groups = [{
-            "document_id": "movie-1",
-            "source": ["A.", "B."],
-            "target": ["甲。", "乙。"],
-            "source_indices": [0, 1],
-            "target_indices": [0, 1],
-        }]
+        groups = [
+            {
+                "document_id": "movie-1",
+                "source": ["A.", "B."],
+                "target": ["甲。", "乙。"],
+                "source_indices": [0, 1],
+                "target_indices": [0, 1],
+            },
+            {
+                "document_id": "movie-2",
+                "source": ["C.", "D."],
+                "target": ["丙。", "丁。"],
+                "source_indices": [0, 1],
+                "target_indices": [0, 1],
+            },
+        ]
         result = summarize_model(groups, "fake-model", 0.35, True)
         self.assertEqual(result["candidate_support_counts"]["both_ordered_pairs_meet_threshold"], 1)
         self.assertEqual(result["ordered_vs_cross_margin"]["positive"], 1)
-        self.assertIn("not proof", result["interpretation"])\n        self.assertEqual(len(result["all_group_diagnostics"]), 1)\n        _clear.assert_called_once()
+        self.assertIn("not proof", result["interpretation"])\n        self.assertEqual(len(result["all_group_diagnostics"]), 2)\n        _clear.assert_called_once()
 
 
 if __name__ == "__main__":
