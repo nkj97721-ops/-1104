@@ -56,8 +56,8 @@ def _candidate_index(candidate_report):
         for row in model.get("all_group_diagnostics", []):
             key = (
                 row.get("document_id"),
-                tuple(row.get("source_indices", [])),
-                tuple(row.get("target_indices", [])),
+                tuple(row.get("source_boundary_ids", [])),
+                tuple(row.get("target_boundary_ids", [])),
             )
             rows[key] = row
         index[model.get("model")] = rows
@@ -76,7 +76,8 @@ def diagnose_model(model_report, candidate_rows=None):
             classification, fragments = classify_boundary_group(source, target, predicted)
             totals[group_type][classification] += 1
             if len(source) == 2 and len(target) == 2 and candidate_rows is not None:
-                key = (document.get("id"), tuple(source), tuple(target))
+                boundary_id = boundary.get("boundary_id")
+                key = (document.get("id"), (boundary_id,), (boundary_id,))
                 evidence = candidate_rows.get(key)
                 if evidence:
                     two_two_evidence[classification].append(evidence)
