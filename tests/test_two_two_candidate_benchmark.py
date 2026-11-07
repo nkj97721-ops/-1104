@@ -65,6 +65,8 @@ class TwoTwoCandidateBenchmarkTests(unittest.TestCase):
                 "target": ["甲。", "乙。"],
                 "source_indices": [0, 1],
                 "target_indices": [0, 1],
+                "source_boundary_ids": ["line-a", "line-b"],
+                "target_boundary_ids": ["line-c", "line-d"],
             },
             {
                 "document_id": "movie-2",
@@ -79,6 +81,8 @@ class TwoTwoCandidateBenchmarkTests(unittest.TestCase):
         self.assertEqual(result["ordered_vs_cross_margin"]["positive"], 2)
         self.assertIn("not proof", result["interpretation"])
         self.assertEqual(len(result["all_group_diagnostics"]), 2)
+        self.assertEqual(result["all_group_diagnostics"][0]["source_boundary_ids"], ["line-a", "line-b"])
+        self.assertEqual(result["all_group_diagnostics"][0]["target_boundary_ids"], ["line-c", "line-d"])
         self.assertEqual(encode.call_count, 2)
         _clear.assert_called_once()
 
