@@ -78,6 +78,8 @@ def load_heldout_groups(path: Path) -> tuple[list[dict[str, Any]], dict[str, int
                     "target": [row["target"][i] for i in ti],
                     "source_indices": [source_origin_indices[i] for i in si],
                     "target_indices": [target_origin_indices[i] for i in ti],
+                    "source_boundary_ids": list(group.get("source_boundary_ids", [])),
+                    "target_boundary_ids": list(group.get("target_boundary_ids", [])),
                 })
         counts["two_two_groups"] += len(groups)
         for group in groups:
