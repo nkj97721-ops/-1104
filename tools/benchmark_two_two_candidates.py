@@ -49,6 +49,21 @@ def load_heldout_groups(path: Path) -> tuple[list[dict[str, Any]], dict[str, int
         if row.get("split") != "test":
             continue
         counts["test_documents"] += 1
+        # proposed_groups index compact sentence arrays. Boundary diagnostics use
+        # original sentence_index values, so map through retained origins before
+        # joining; otherwise filtering/sentence splitting silently misaligns rows.
+        source_origins = row.get("source_sentence_origins") or []
+        target_origins = row.get("target_sentence_origins") or []
+        source_origin_indices = [
+            int(item["sentence_index"]) for item in source_origins
+        ] if source_origins else list(range(len(row["source"])))
+        target_origin_indices = [
+            int(item["sentence_index"]) for item in target_origins
+        ] if target_origins else list(range(len(row["target"])))
+        if len(source_origin_indices) != len(row["source"]):
+            raise ValueError(f"{row['id']}: source origin count does not match sentences")
+        if len(target_origin_indices) != len(row["target"]):
+            raise ValueError(f"{row['id']}: target origin count does not match sentences")
         groups = []
         for group in row.get("proposed_groups", []):
             if len(group.get("source", [])) == 2 and len(group.get("target", [])) == 2:
@@ -61,8 +76,8 @@ def load_heldout_groups(path: Path) -> tuple[list[dict[str, Any]], dict[str, int
                     "document_id": row["id"],
                     "source": [row["source"][i] for i in si],
                     "target": [row["target"][i] for i in ti],
-                    "source_indices": list(si),
-                    "target_indices": list(ti),
+                    "source_indices": [source_origin_indices[i] for i in si],
+                    "target_indices": [target_origin_indices[i] for i in ti],
                 })
         counts["two_two_groups"] += len(groups)
         for group in groups:
