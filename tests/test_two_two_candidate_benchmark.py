@@ -67,8 +67,8 @@ class TwoTwoCandidateBenchmarkTests(unittest.TestCase):
             },
         ]
         result = summarize_model(groups, "fake-model", 0.35, True)
-        self.assertEqual(result["candidate_support_counts"]["both_ordered_pairs_meet_threshold"], 1)
-        self.assertEqual(result["ordered_vs_cross_margin"]["positive"], 1)
+        self.assertEqual(result["candidate_support_counts"]["both_ordered_pairs_meet_threshold"], 2)
+        self.assertEqual(result["ordered_vs_cross_margin"]["positive"], 2)
         self.assertIn("not proof", result["interpretation"])
         self.assertEqual(len(result["all_group_diagnostics"]), 2)
         self.assertEqual(encode.call_count, 2)
