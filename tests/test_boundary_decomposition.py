@@ -58,8 +58,11 @@ class BoundaryDecompositionTests(unittest.TestCase):
         candidates = {"model_diagnostics": [{
             "model": "test-model",
             "all_group_diagnostics": [{
-                "document_id": "doc-1", "source_indices": [0, 1],
-                "target_indices": [0, 1], "ordered_minus_cross_margin": 0.4,
+                "document_id": "doc-1", "source_indices": [100, 101],
+                "target_indices": [200, 201],
+                "source_boundary_ids": ["line-1"],
+                "target_boundary_ids": ["line-1"],
+                "ordered_minus_cross_margin": 0.4,
                 "pairs_over_threshold": 2,
             }],
         }]}
