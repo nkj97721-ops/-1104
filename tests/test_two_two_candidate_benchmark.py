@@ -27,6 +27,12 @@ class TwoTwoCandidateBenchmarkTests(unittest.TestCase):
                 "id": "test", "split": "test",
                 "reference_status": "automatic_silver_reference",
                 "source": ["A.", "B.", "C."], "target": ["甲。", "乙。", "丙。"],
+                "source_sentence_origins": [
+                    {"sentence_index": 10}, {"sentence_index": 11}, {"sentence_index": 12},
+                ],
+                "target_sentence_origins": [
+                    {"sentence_index": 20}, {"sentence_index": 21}, {"sentence_index": 22},
+                ],
                 "proposed_groups": [
                     {"source": [0, 1], "target": [0, 1]},
                     {"source": [2], "target": [2]},
@@ -39,6 +45,8 @@ class TwoTwoCandidateBenchmarkTests(unittest.TestCase):
             groups, counts = load_heldout_groups(path)
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0]["document_id"], "test")
+        self.assertEqual(groups[0]["source_indices"], [10, 11])
+        self.assertEqual(groups[0]["target_indices"], [20, 21])
         self.assertEqual(counts["two_two_groups"], 1)
         self.assertEqual(counts["test_documents"], 1)
 
