@@ -2,7 +2,7 @@ name: Real corpus alignment benchmark
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/dual-track-2x2-evidence]
     paths:
       - "tools/**"
       - "tests/**"
@@ -56,6 +56,15 @@ jobs:
             --output-dir data/wmt-silver \
             --calibration-documents 20 \
             --max-segments-per-document 40
+      - name: Diagnose ordered 1:1 candidates inside held-out OpenSubtitles 2:2 groups
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          python tools/benchmark_two_two_candidates.py \
+            --input data/opensubtitles2024-silver/silver_reference.jsonl \
+            --output reports/opensubtitles2024-two-two-candidates.json \
+            --threshold 0.35 \
+            --no-cuda
       - name: Run dual-model automatic silver benchmark on OpenSubtitles
         env:
           TOKENIZERS_PARALLELISM: "false"
@@ -69,6 +78,12 @@ jobs:
             --two-two-penalties 0.00,0.04,0.08,0.12,0.16 \
             --max-documents-per-split 40 \
             --no-cuda
+      - name: Diagnose original boundary groups versus predicted sentence groupings
+        run: |
+          python tools/diagnose_boundary_decomposition.py \
+            --input reports/opensubtitles2024-silver-comparison.json \
+            --candidates reports/opensubtitles2024-two-two-candidates.json \
+            --output reports/opensubtitles2024-boundary-decomposition.json
       - name: Run dual-model automatic silver benchmark on WMT
         env:
           TOKENIZERS_PARALLELISM: "false"
@@ -92,7 +107,9 @@ jobs:
             data/opensubtitles2024-silver/silver_reference.jsonl
             data/wmt-silver/manifest.json
             data/wmt-silver/silver_reference.jsonl
+            reports/opensubtitles2024-two-two-candidates.json
             reports/opensubtitles2024-silver-comparison.json
+            reports/opensubtitles2024-boundary-decomposition.json
             reports/wmt17-silver-comparison.json
           if-no-files-found: warn
           retention-days: 30

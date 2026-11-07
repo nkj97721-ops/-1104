@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -14,6 +15,58 @@ if str(ROOT) not in sys.path:
 
 from tools.sentence_align import align_sentence_embeddings, encode_sentences, split_sentences
 from tools.semantic_align import align_text_batch
+
+
+def build_two_two_pair_evidence(
+    match: dict[str, Any],
+    source_sentences: Sequence[str],
+    target_sentences: Sequence[str],
+    source_vectors: Sequence[Sequence[float]],
+    target_vectors: Sequence[Sequence[float]],
+    threshold: float,
+) -> dict[str, Any] | None:
+    """Expose ordered 1:1 candidates inside a 2:2 group without splitting its boundary."""
+    source_indices = match["source_indices"]
+    target_indices = match["target_indices"]
+    if len(source_indices) != 2 or len(target_indices) != 2:
+        return None
+
+    pairs = []
+    for source_index, target_index in zip(source_indices, target_indices):
+        source = [float(value) for value in source_vectors[source_index]]
+        target = [float(value) for value in target_vectors[target_index]]
+        if len(source) != len(target):
+            raise ValueError("Source and target sentence vector dimensions must match")
+        source_norm = math.sqrt(sum(value * value for value in source))
+        target_norm = math.sqrt(sum(value * value for value in target))
+        score = (
+            sum(a * b for a, b in zip(source, target)) / (source_norm * target_norm)
+            if source_norm and target_norm else 0.0
+        )
+        score = max(-1.0, min(1.0, score))
+        pairs.append({
+            "source_index": source_index,
+            "target_index": target_index,
+            "english": source_sentences[source_index],
+            "chinese": target_sentences[target_index],
+            "similarity": round(score, 4),
+            "meets_threshold": score >= threshold,
+            "status": "candidate_only",
+        })
+
+    return {
+        "boundary_group_type": "2:2",
+        "boundary_source_indices": list(source_indices),
+        "boundary_target_indices": list(target_indices),
+        "boundary_group_similarity": match["similarity"],
+        "ordered_pair_candidates": pairs,
+        "candidate_status": (
+            "two_ordered_pair_candidates"
+            if all(pair["meets_threshold"] for pair in pairs)
+            else "insufficient_individual_pair_evidence"
+        ),
+        "interpretation": "模型候选，不是已验证语义金标准；原始 2:2 字幕边界组保持不变。",
+    }
 
 
 def align_document(
@@ -47,6 +100,7 @@ def align_document(
     all_links: list[dict[str, Any]] = []
     all_candidates: list[dict[str, Any]] = []
     sentence_pairs = []
+    semantic_pair_candidates = []
 
     for pair_index, (match, aligned) in enumerate(zip(sentence_result["matches"], word_results)):
         en_text, zh_text = matched_text_pairs[pair_index]
@@ -71,12 +125,20 @@ def align_document(
                 "sentence_pair": pair_index,
                 "sentence_similarity": match["similarity"],
             })
-        sentence_pairs.append({
+
+        pair_record = {
             **match,
             "english": en_text,
             "chinese": zh_text,
             "phrase_candidate_count": len(aligned["phrase_candidates"]),
-        })
+        }
+        pair_evidence = build_two_two_pair_evidence(
+            match, en_sentences, zh_sentences, en_vectors, zh_vectors, threshold
+        )
+        if pair_evidence is not None:
+            pair_record["semantic_pair_evidence"] = pair_evidence
+            semantic_pair_candidates.append(pair_evidence)
+        sentence_pairs.append(pair_record)
 
     return {
         "engine": "Multilingual BERT sentence alignment + batched AWESOME-align word alignment",
@@ -86,7 +148,11 @@ def align_document(
         "target_language": "zh",
         "source_sentences": en_sentences,
         "target_sentences": zh_sentences,
+        # Keep original DP boundary groups intact as an explicit output track.
+        "boundary_groups": sentence_pairs,
         "sentence_pairs": sentence_pairs,
+        # This separate track contains model candidates, not verified semantic gold links.
+        "semantic_pair_candidates": semantic_pair_candidates,
         "unmatched_source_sentences": [
             {"index": index, "text": en_sentences[index]}
             for index in sentence_result["unmatched_source"]
@@ -106,6 +172,11 @@ def align_document(
             "source_sentence_count": len(en_sentences),
             "target_sentence_count": len(zh_sentences),
             "matched_sentence_groups": len(sentence_pairs),
+            "two_two_boundary_groups": len(semantic_pair_candidates),
+            "two_two_groups_with_two_ordered_pair_candidates": sum(
+                item["candidate_status"] == "two_ordered_pair_candidates"
+                for item in semantic_pair_candidates
+            ),
             "unmatched_source_sentence_count": len(sentence_result["unmatched_source"]),
             "unmatched_target_sentence_count": len(sentence_result["unmatched_target"]),
             "aligned_link_count": len(all_links),
@@ -113,6 +184,7 @@ def align_document(
         },
         "notice": (
             "句子配对基于多语言句向量余弦相似度和单调动态规划，支持 1:1、1:2、2:1、2:2 及未匹配句子；"
+            "原始字幕边界组与 2:2 内部的有序 1:1 语义候选分开输出，候选不是已验证金标准。"
             "当前不支持任意句子重排序。短语由词级对齐链接提取。所有分数均为模型/算法评分，"
             "不是经过校准的翻译正确概率；请检查未匹配句子和短语候选。"
         ),
