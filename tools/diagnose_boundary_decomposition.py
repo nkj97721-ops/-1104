@@ -68,6 +68,8 @@ def diagnose_model(model_report, candidate_rows=None):
     totals = defaultdict(Counter)
     examples = []
     two_two_evidence = defaultdict(list)
+    two_two_total = 0
+    two_two_joined = 0
     for document in model_report.get("heldout_document_errors", []):
         predicted = document.get("predicted", [])
         for boundary in document.get("original_boundary_groups", []):
@@ -76,10 +78,12 @@ def diagnose_model(model_report, candidate_rows=None):
             classification, fragments = classify_boundary_group(source, target, predicted)
             totals[group_type][classification] += 1
             if len(source) == 2 and len(target) == 2 and candidate_rows is not None:
+                two_two_total += 1
                 boundary_id = boundary.get("boundary_id")
                 key = (document.get("id"), (boundary_id,), (boundary_id,))
                 evidence = candidate_rows.get(key)
                 if evidence:
+                    two_two_joined += 1
                     two_two_evidence[classification].append(evidence)
             if classification != "exact_boundary_group" and len(examples) < 200:
                 examples.append({
@@ -115,6 +119,12 @@ def diagnose_model(model_report, candidate_rows=None):
     return {
         "model": model_report.get("model"),
         "by_group_type": by_type,
+        "two_two_embedding_join_coverage": {
+            "reference_2_2_boundary_groups": two_two_total,
+            "joined_groups": two_two_joined,
+            "missing_groups": two_two_total - two_two_joined,
+            "complete": two_two_total == two_two_joined,
+        } if candidate_rows is not None else None,
         "two_two_embedding_evidence_by_dp_classification": correlation,
         "non_exact_examples_limit": 200,
         "non_exact_examples": examples,
