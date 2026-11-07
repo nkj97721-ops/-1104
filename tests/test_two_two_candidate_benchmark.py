@@ -49,8 +49,6 @@ class TwoTwoCandidateBenchmarkTests(unittest.TestCase):
         encode.return_value = [
             [1.0, 0.0], [0.0, 1.0],
             [0.9, 0.1], [0.1, 0.9],
-            [1.0, 0.0], [0.0, 1.0],
-            [0.9, 0.1], [0.1, 0.9],
         ]
         groups = [
             {
@@ -71,7 +69,10 @@ class TwoTwoCandidateBenchmarkTests(unittest.TestCase):
         result = summarize_model(groups, "fake-model", 0.35, True)
         self.assertEqual(result["candidate_support_counts"]["both_ordered_pairs_meet_threshold"], 1)
         self.assertEqual(result["ordered_vs_cross_margin"]["positive"], 1)
-        self.assertIn("not proof", result["interpretation"])\n        self.assertEqual(len(result["all_group_diagnostics"]), 2)\n        _clear.assert_called_once()
+        self.assertIn("not proof", result["interpretation"])
+        self.assertEqual(len(result["all_group_diagnostics"]), 2)
+        self.assertEqual(encode.call_count, 2)
+        _clear.assert_called_once()
 
 
 if __name__ == "__main__":
