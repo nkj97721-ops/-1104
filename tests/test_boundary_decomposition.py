@@ -73,6 +73,12 @@ class BoundaryDecompositionTests(unittest.TestCase):
             model["by_group_type"]["2:2"]["classifications"]["split_into_two_ordered_1_to_1"],
             1,
         )
+        self.assertEqual(model["two_two_embedding_join_coverage"], {
+            "reference_2_2_boundary_groups": 1,
+            "joined_groups": 1,
+            "missing_groups": 0,
+            "complete": True,
+        })
         evidence = model["two_two_embedding_evidence_by_dp_classification"]
         self.assertEqual(evidence["split_into_two_ordered_1_to_1"]["positive_ordered_minus_cross_margin"], 1)
         self.assertEqual(evidence["split_into_two_ordered_1_to_1"]["both_ordered_pairs_over_threshold"], 1)
